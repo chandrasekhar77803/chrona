@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Profile Security Rules (users/{uid})
+    match /users/{userId} {
+      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+
+      // Smart Notes Subcollection (users/{userId}/smartNotes/{noteId})
+      match /smartNotes/{noteId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Goals Collection Security Rules (goals/{goalId})
+    match /goals/{goalId} {
+      allow read, write: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid) && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Tasks / Missions Collection Security Rules (tasks/{taskId})
+    match /tasks/{taskId} {
+      allow read, write: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid) && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Study Documents Collection Security Rules (studyDocuments/{docId})
+    match /studyDocuments/{docId} {
+      allow read, write: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid) && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Career GPS Collection Security Rules (careerGps/{userId})
+    match /careerGps/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+  }
+}
