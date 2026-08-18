@@ -5,13 +5,13 @@ import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA_9iU14NCB9fLgnc9MYIWDQ0Pd1aZhhV0",
-  authDomain: "chandu-8ce33.firebaseapp.com",
-  projectId: "chandu-8ce33",
-  storageBucket: "chandu-8ce33.firebasestorage.app",
-  messagingSenderId: "856407713044",
-  appId: "1:856407713044:web:440f756b48da855db4ce01",
-  measurementId: "G-K6GSMHH2EC"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA_9iU14NCB9fLgnc9MYIWDQ0Pd1aZhhV0",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "chandu-8ce33.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "chandu-8ce33",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "chandu-8ce33.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "856407713044",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:856407713044:web:440f756b48da855db4ce01",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-K6GSMHH2EC"
 };
 
 // Initialize Firebase App
