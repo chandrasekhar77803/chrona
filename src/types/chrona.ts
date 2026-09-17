@@ -584,3 +584,77 @@ export interface PlacementProfile {
   readiness: PlacementReadinessBreakdown;
   updatedAt: string;
 }
+
+// ==========================================
+// CHRONA CONNECT API CONFIGURATION & LIVE NOTIFICATION SYSTEM TYPES
+// ==========================================
+
+export type IntegrationStatus =
+  | 'NOT_CONFIGURED'
+  | 'CONFIGURED'
+  | 'CONNECTING'
+  | 'CONNECTED'
+  | 'SYNCING'
+  | 'SYNCED'
+  | 'SYNC_ERROR'
+  | 'DISCONNECTED';
+
+export type NotificationPriority = 'HIGH' | 'MEDIUM' | 'NORMAL';
+
+export interface ChronaNotification {
+  id: string;
+  userId: string;
+  source: 'LinkedIn' | 'WhatsApp' | 'LeetCode' | 'System' | 'Campus' | 'GitHub';
+  integrationId: string; // 'linkedin' | 'whatsapp' | 'leetcode' etc.
+  type: 'activity' | 'message' | 'announcement' | 'career_opportunity' | 'sync_status' | 'alert';
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  priority: NotificationPriority;
+  url?: string;
+  targetSection?: NavSection;
+  metadata?: Record<string, any>;
+  externalNotificationId?: string; // used for deduplication: provider + externalId
+  isDemo?: boolean;
+  createdAt?: string;
+}
+
+export interface LinkedInIntegrationConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  accessToken?: string;
+  apiVersion?: string;
+  scopes?: string[];
+  lastTestedAt?: string;
+  status: IntegrationStatus;
+  errorMessage?: string;
+}
+
+export interface WhatsAppIntegrationConfig {
+  appId: string;
+  appSecret: string;
+  businessAccountId: string;
+  phoneNumberId: string;
+  accessToken: string;
+  webhookVerifyToken: string;
+  webhookUrl: string;
+  lastTestedAt?: string;
+  status: IntegrationStatus;
+  errorMessage?: string;
+}
+
+export interface ChronaIntegrationRecord {
+  provider: string; // 'linkedin' | 'whatsapp' | 'leetcode' etc.
+  status: IntegrationStatus;
+  accountIdentifier?: string;
+  scopes: string[];
+  connectedAt?: string;
+  updatedAt?: string;
+  lastSyncAt?: string;
+  hasCredentials?: boolean;
+  metadata?: Record<string, any>;
+  errorMessage?: string;
+}
+

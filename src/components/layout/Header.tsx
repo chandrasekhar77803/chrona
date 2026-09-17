@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useChrona } from '../../context/ChronaContext';
 import { useAuth } from '../../context/AuthContext';
 import { HelpCircle, Zap, User, Settings, LogOut, RefreshCw, ChevronDown, CheckCircle2, Globe } from 'lucide-react';
+import { NotificationCenter } from '../common/NotificationCenter';
 
 export const Header: React.FC = () => {
   const {
@@ -107,6 +108,9 @@ export const Header: React.FC = () => {
           <Zap className={`w-3.5 h-3.5 ${isFocusBubbleActive ? 'text-amber-300 fill-amber-300' : 'text-purple-400'}`} />
           <span>Focus Bubble</span>
         </button>
+
+        {/* UNIFIED NOTIFICATION CENTER */}
+        <NotificationCenter />
 
         {/* TOP-RIGHT USER AVATAR DROPDOWN MENU */}
         <div className="relative" ref={dropdownRef}>

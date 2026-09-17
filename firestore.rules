@@ -10,6 +10,21 @@ service cloud.firestore {
       match /smartNotes/{noteId} {
         allow read, write, delete: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Integrations Subcollection (users/{userId}/integrations/{provider})
+      match /integrations/{provider} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Secure Integration Configurations (users/{userId}/integrationConfigs/{provider})
+      match /integrationConfigs/{provider} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Live Notifications Subcollection (users/{userId}/notifications/{notificationId})
+      match /notifications/{notificationId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // Goals Collection Security Rules (goals/{goalId})

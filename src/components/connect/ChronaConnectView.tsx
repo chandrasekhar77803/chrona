@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useChrona } from '../../context/ChronaContext';
 import {
@@ -10,9 +10,21 @@ import {
   Shield,
   X,
   User,
-  KeyRound
+  KeyRound,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  AlertTriangle,
+  ExternalLink,
+  Layers,
+  Globe,
+  Settings,
+  MessageSquare
 } from 'lucide-react';
 import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
+import { maskSecret } from '../../services/apiIntegrationService';
+import type { IntegrationStatus } from '../../types/chrona';
 
 export interface PlatformConfig {
   id: string;
@@ -31,10 +43,20 @@ export const ChronaConnectView: React.FC = () => {
     addCustomMission,
     userIntegrations,
     connectUserIntegration,
-    disconnectUserIntegration
+    disconnectUserIntegration,
+    notifications,
+    isDemoNotificationMode,
+    toggleDemoNotificationMode,
+    linkedInConfig,
+    whatsAppConfig,
+    saveLinkedInSettings,
+    saveWhatsAppSettings,
+    testLinkedIn,
+    testWhatsApp,
+    markNotificationAsRead
   } = useChrona();
 
-  const [activeTab, setActiveTab] = useState<'platforms' | 'hub' | 'privacy'>('platforms');
+  const [activeTab, setActiveTab] = useState<'platforms' | 'config' | 'hub' | 'privacy'>('platforms');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Permission & Account Linking Modal State
@@ -46,21 +68,66 @@ export const ChronaConnectView: React.FC = () => {
   // Notification Hub State
   const [selectedHubCategory, setSelectedHubCategory] = useState<string>('All');
 
+  // Copy to clipboard helpers
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const copyToClipboard = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldId);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // ── LINKEDIN CONFIGURATION FORM STATE ──
+  const [liClientId, setLiClientId] = useState<string>('');
+  const [liClientSecret, setLiClientSecret] = useState<string>('');
+  const [liRedirectUri, setLiRedirectUri] = useState<string>('');
+  const [liAccessToken, setLiAccessToken] = useState<string>('');
+  const [liApiVersion, setLiApiVersion] = useState<string>('202401');
+  const [showLiSecret, setShowLiSecret] = useState<boolean>(false);
+  const [showLiToken, setShowLiToken] = useState<boolean>(false);
+  const [isTestingLinkedIn, setIsTestingLinkedIn] = useState<boolean>(false);
+  const [isSavingLinkedIn, setIsSavingLinkedIn] = useState<boolean>(false);
+  const [liFeedback, setLiFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // ── WHATSAPP CONFIGURATION FORM STATE ──
+  const [waAppId, setWaAppId] = useState<string>('');
+  const [waAppSecret, setWaAppSecret] = useState<string>('');
+  const [waBusinessAccountId, setWaBusinessAccountId] = useState<string>('');
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState<string>('');
+  const [waAccessToken, setWaAccessToken] = useState<string>('');
+  const [waWebhookVerifyToken, setWaWebhookVerifyToken] = useState<string>('');
+  const [waWebhookUrl, setWaWebhookUrl] = useState<string>('');
+  const [showWaSecret, setShowWaSecret] = useState<boolean>(false);
+  const [showWaToken, setShowWaToken] = useState<boolean>(false);
+  const [showWaVerifyToken, setShowWaVerifyToken] = useState<boolean>(false);
+  const [isTestingWhatsApp, setIsTestingWhatsApp] = useState<boolean>(false);
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState<boolean>(false);
+  const [waFeedback, setWaFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Sync state from context configs
+  useEffect(() => {
+    if (linkedInConfig) {
+      setLiClientId(linkedInConfig.clientId || '');
+      setLiClientSecret(linkedInConfig.clientSecret || '');
+      setLiRedirectUri(linkedInConfig.redirectUri || `${window.location.origin}/auth/linkedin/callback`);
+      setLiAccessToken(linkedInConfig.accessToken || '');
+      setLiApiVersion(linkedInConfig.apiVersion || '202401');
+    }
+  }, [linkedInConfig]);
+
+  useEffect(() => {
+    if (whatsAppConfig) {
+      setWaAppId(whatsAppConfig.appId || '');
+      setWaAppSecret(whatsAppConfig.appSecret || '');
+      setWaBusinessAccountId(whatsAppConfig.businessAccountId || '');
+      setWaPhoneNumberId(whatsAppConfig.phoneNumberId || '');
+      setWaAccessToken(whatsAppConfig.accessToken || '');
+      setWaWebhookVerifyToken(whatsAppConfig.webhookVerifyToken || '');
+      setWaWebhookUrl(whatsAppConfig.webhookUrl || `${window.location.origin}/api/webhooks/whatsapp`);
+    }
+  }, [whatsAppConfig]);
+
   // Supported Platforms Registry
   const platformsList: PlatformConfig[] = [
-    {
-      id: 'leetcode',
-      name: 'LeetCode',
-      category: 'Competitive Coding',
-      iconName: 'Code2',
-      description: 'Sync solved problem metrics (Easy/Medium/Hard), contest rating, and Placement Readiness Score.',
-      availablePermissions: [
-        'Read Solved Problem Metrics (Easy/Medium/Hard)',
-        'Read Contest Rating & World Ranking',
-        'Read Daily Streak & Topics Covered',
-        'Sync Progress with Career GPS Placement Readiness'
-      ]
-    },
     {
       id: 'linkedin',
       name: 'LinkedIn',
@@ -72,6 +139,32 @@ export const ChronaConnectView: React.FC = () => {
         'Read Work Experience & Education History',
         'Read Profile Certifications',
         'Sync Career Preferences with Career GPS Engine'
+      ]
+    },
+    {
+      id: 'whatsapp',
+      name: 'WhatsApp Notification Assistant',
+      category: 'Notification Assistant',
+      iconName: 'MessageSquare',
+      description: 'Permission-based assistant for placement & college groups. Zero access to private chats!',
+      supportsGroups: true,
+      availablePermissions: [
+        'Monitor Selected Placement & College Notice Groups Only',
+        'Extract Hackathon, Internship & Drive Announcements',
+        'Strictly ZERO Access to Private Chats or Personal Messages'
+      ]
+    },
+    {
+      id: 'leetcode',
+      name: 'LeetCode',
+      category: 'Competitive Coding',
+      iconName: 'Code2',
+      description: 'Sync solved problem metrics (Easy/Medium/Hard), contest rating, and Placement Readiness Score.',
+      availablePermissions: [
+        'Read Solved Problem Metrics (Easy/Medium/Hard)',
+        'Read Contest Rating & World Ranking',
+        'Read Daily Streak & Topics Covered',
+        'Sync Progress with Career GPS Placement Readiness'
       ]
     },
     {
@@ -158,19 +251,6 @@ export const ChronaConnectView: React.FC = () => {
       ]
     },
     {
-      id: 'whatsapp',
-      name: 'WhatsApp Notification Assistant',
-      category: 'Notification Assistant',
-      iconName: 'MessageSquare',
-      description: 'Permission-based assistant for placement & college groups. Zero access to private chats!',
-      supportsGroups: true,
-      availablePermissions: [
-        'Monitor Selected Placement & College Notice Groups Only',
-        'Extract Hackathon, Internship & Drive Announcements',
-        'Strictly ZERO Access to Private Chats or Personal Messages'
-      ]
-    },
-    {
       id: 'telegram',
       name: 'Telegram Notification Assistant',
       category: 'Notification Assistant',
@@ -185,60 +265,195 @@ export const ChronaConnectView: React.FC = () => {
     }
   ];
 
-  // AI Notification Opportunities Data
-  const sampleNotifications = [
-    {
-      id: 'notif_1',
-      platform: 'LeetCode',
-      category: 'Coding Contests',
-      title: 'LeetCode Weekly Contest 412 Announced',
-      description: 'Starts Sunday 08:00 AM. Expected topics: Dynamic Programming & Binary Search.',
-      deadline: 'In 2 Days',
-      priority: 'High' as const,
-      matchedCompany: studentProfile?.dreamCompany || 'Google',
-      suggestedTask: 'Register & Complete LeetCode Weekly Contest 412'
-    },
-    {
-      id: 'notif_2',
-      platform: 'LinkedIn',
-      category: 'Internships',
-      title: `${studentProfile?.dreamCompany || 'Google'} Summer AI Research Internship Applications Open`,
-      description: 'Role: AI/ML Engineering Intern. Requirements: Python, PyTorch, System Fundamentals.',
-      deadline: '5 Days Left',
-      priority: 'High' as const,
-      matchedCompany: studentProfile?.dreamCompany || 'Google',
-      suggestedTask: `Apply for ${studentProfile?.dreamCompany || 'Google'} Summer AI Internship`
-    },
-    {
-      id: 'notif_3',
-      platform: 'WhatsApp Notification Assistant',
-      category: 'Placement Drives',
-      title: 'Campus Drive Announcement: Tier-1 Tech Placement Registration',
-      description: 'Extracted from Placement Group. Eligible: CS/IT students with >7.5 CGPA.',
-      deadline: 'Tomorrow 11:59 PM',
-      priority: 'High' as const,
-      matchedCompany: 'Campus Placement',
-      suggestedTask: 'Submit Resume & Transcript for Campus Placement Drive'
-    },
-    {
-      id: 'notif_4',
-      platform: 'GitHub',
-      category: 'Hackathons',
-      title: 'Global Open Source AI Hackathon 2026',
-      description: '$50,000 Prize Pool. Build generative AI agents using Google Antigravity SDK.',
-      deadline: '10 Days Left',
-      priority: 'Medium' as const,
-      matchedCompany: 'Open Source',
-      suggestedTask: 'Form Team & Submit Proposal for Open Source AI Hackathon'
+  // ── SAVE & TEST ACTIONS FOR LINKEDIN ──
+  const handleSaveLinkedIn = async () => {
+    setIsSavingLinkedIn(true);
+    setLiFeedback(null);
+    try {
+      const updated = await saveLinkedInSettings({
+        clientId: liClientId.trim(),
+        clientSecret: liClientSecret.trim(),
+        redirectUri: liRedirectUri.trim(),
+        accessToken: liAccessToken.trim() || undefined,
+        apiVersion: liApiVersion.trim() || '202401'
+      });
+      setLiFeedback({
+        type: 'success',
+        text: `Configuration saved (${updated.status === 'CONFIGURED' ? 'Configured' : 'Saved'}).`
+      });
+    } catch (err: any) {
+      setLiFeedback({
+        type: 'error',
+        text: err?.message || 'Failed to save LinkedIn configuration.'
+      });
+    } finally {
+      setIsSavingLinkedIn(false);
     }
-  ];
+  };
 
-  // Open Permission & Account Linking Modal
+  const handleTestLinkedIn = async () => {
+    setIsTestingLinkedIn(true);
+    setLiFeedback(null);
+    try {
+      const result = await testLinkedIn({
+        clientId: liClientId.trim(),
+        clientSecret: liClientSecret.trim(),
+        redirectUri: liRedirectUri.trim(),
+        accessToken: liAccessToken.trim() || undefined,
+        apiVersion: liApiVersion.trim() || '202401',
+        status: linkedInConfig.status
+      });
+
+      if (result.success) {
+        setLiFeedback({ type: 'success', text: `✅ ${result.message}` });
+      } else {
+        setLiFeedback({ type: 'error', text: `❌ ${result.message}` });
+      }
+    } catch (err: any) {
+      setLiFeedback({
+        type: 'error',
+        text: 'Connection failed — please verify your credentials.'
+      });
+    } finally {
+      setIsTestingLinkedIn(false);
+    }
+  };
+
+  const handleDisconnectLinkedIn = async () => {
+    await saveLinkedInSettings({
+      status: 'DISCONNECTED',
+      accessToken: undefined,
+      errorMessage: undefined
+    });
+    setLiFeedback({ type: 'info', text: 'LinkedIn integration disconnected.' });
+  };
+
+  // ── SAVE & TEST ACTIONS FOR WHATSAPP ──
+  const handleSaveWhatsApp = async () => {
+    setIsSavingWhatsApp(true);
+    setWaFeedback(null);
+    try {
+      const updated = await saveWhatsAppSettings({
+        appId: waAppId.trim(),
+        appSecret: waAppSecret.trim(),
+        businessAccountId: waBusinessAccountId.trim(),
+        phoneNumberId: waPhoneNumberId.trim(),
+        accessToken: waAccessToken.trim(),
+        webhookVerifyToken: waWebhookVerifyToken.trim(),
+        webhookUrl: waWebhookUrl.trim()
+      });
+      setWaFeedback({
+        type: 'success',
+        text: `Configuration saved (${updated.status === 'CONFIGURED' ? 'Configured' : 'Saved'}).`
+      });
+    } catch (err: any) {
+      setWaFeedback({
+        type: 'error',
+        text: err?.message || 'Failed to save WhatsApp configuration.'
+      });
+    } finally {
+      setIsSavingWhatsApp(false);
+    }
+  };
+
+  const handleTestWhatsApp = async () => {
+    setIsTestingWhatsApp(true);
+    setWaFeedback(null);
+    try {
+      const result = await testWhatsApp({
+        appId: waAppId.trim(),
+        appSecret: waAppSecret.trim(),
+        businessAccountId: waBusinessAccountId.trim(),
+        phoneNumberId: waPhoneNumberId.trim(),
+        accessToken: waAccessToken.trim(),
+        webhookVerifyToken: waWebhookVerifyToken.trim(),
+        webhookUrl: waWebhookUrl.trim(),
+        status: whatsAppConfig.status
+      });
+
+      if (result.success) {
+        setWaFeedback({ type: 'success', text: `✅ ${result.message}` });
+      } else {
+        setWaFeedback({ type: 'error', text: `❌ ${result.message}` });
+      }
+    } catch (err: any) {
+      setWaFeedback({
+        type: 'error',
+        text: 'Connection failed — please verify your credentials.'
+      });
+    } finally {
+      setIsTestingWhatsApp(false);
+    }
+  };
+
+  const handleDisconnectWhatsApp = async () => {
+    await saveWhatsAppSettings({
+      status: 'DISCONNECTED',
+      accessToken: '',
+      errorMessage: undefined
+    });
+    setWaFeedback({ type: 'info', text: 'WhatsApp integration disconnected.' });
+  };
+
+  // Status Badge Renderer
+  const renderStatusBadge = (status?: string | IntegrationStatus) => {
+    const normalized = (status || 'NOT_CONFIGURED').toUpperCase();
+    switch (normalized) {
+      case 'CONNECTED':
+      case 'SYNCED':
+        return (
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            CONNECTED
+          </span>
+        );
+      case 'CONFIGURED':
+        return (
+          <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400 text-indigo-300 text-xs font-mono font-bold flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            CONFIGURED
+          </span>
+        );
+      case 'CONNECTING':
+      case 'SYNCING':
+        return (
+          <span className="px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400 text-amber-300 text-xs font-mono font-bold flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            TESTING...
+          </span>
+        );
+      case 'SYNC_ERROR':
+        return (
+          <span className="px-2.5 py-1 rounded-full bg-rose-500/20 border border-rose-500 text-rose-300 text-xs font-mono font-bold flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            CONNECTION ERROR
+          </span>
+        );
+      case 'DISCONNECTED':
+        return (
+          <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-xs font-mono font-bold">
+            DISCONNECTED
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-800 text-xs font-mono font-bold">
+            NOT CONFIGURED
+          </span>
+        );
+    }
+  };
+
+  // Open Permission Modal
   const openPermissionModal = (platform: PlatformConfig) => {
+    if (platform.id === 'linkedin' || platform.id === 'whatsapp') {
+      setActiveTab('config');
+      return;
+    }
+
     setSelectedPlatform(platform);
     setSelectedPermissions([...platform.availablePermissions]);
     
-    // Pre-fill existing account handle if available
     const existingRec = userIntegrations[platform.id];
     if (existingRec && existingRec.accountIdentifier) {
       setAccountInput(existingRec.accountIdentifier);
@@ -249,43 +464,31 @@ export const ChronaConnectView: React.FC = () => {
     }
   };
 
-  // Toggle Individual Permission Checkbox
   const togglePermission = (perm: string) => {
     setSelectedPermissions(prev =>
       prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]
     );
   };
 
-  // Grant Consent & Connect Platform
   const handleConnectPlatform = async () => {
     if (!selectedPlatform || !currentUser) return;
     if (!accountInput.trim()) return;
 
     setIsSyncing(true);
-
-    console.log(`[CONNECT DEBUG] Provider: ${selectedPlatform.id} | User UID: ${currentUser.id} | Account: ${accountInput.trim()}`);
-    
     await connectUserIntegration(
       selectedPlatform.id,
       accountInput.trim(),
       selectedPermissions
     );
-
-    console.log(`[CONNECT DEBUG] Authorization result: SUCCESS | Firestore write result: SUCCESS | Status: Connected`);
-
     setIsSyncing(false);
     setSelectedPlatform(null);
   };
 
-  // Disconnect Platform
   const handleDisconnect = async (platformId: string) => {
     if (!currentUser) return;
-    console.log(`[CONNECT DEBUG] Disconnect provider: ${platformId} | User UID: ${currentUser.id}`);
     await disconnectUserIntegration(platformId);
-    console.log(`[CONNECT DEBUG] Firestore update: ${platformId} disconnected | Final status: Disconnected`);
   };
 
-  // Push Opportunity to Today's Mission
   const handlePushToTodayMission = (taskTitle: string) => {
     addCustomMission(
       taskTitle,
@@ -296,12 +499,18 @@ export const ChronaConnectView: React.FC = () => {
     );
   };
 
-  const filteredNotifications = sampleNotifications.filter(n => {
-    if (selectedHubCategory === 'All') return true;
-    return n.category === selectedHubCategory;
-  });
+  const connectedCount = Object.values(userIntegrations).filter(rec => rec.status === 'connected').length +
+    (linkedInConfig.status === 'CONNECTED' ? 1 : 0) +
+    (whatsAppConfig.status === 'CONNECTED' ? 1 : 0);
 
-  const connectedCount = Object.values(userIntegrations).filter(rec => rec.status === 'connected').length;
+  const filteredNotifications = notifications.filter(n => {
+    if (selectedHubCategory === 'All') return true;
+    if (selectedHubCategory === 'LinkedIn') return n.source.toLowerCase().includes('linkedin');
+    if (selectedHubCategory === 'WhatsApp') return n.source.toLowerCase().includes('whatsapp');
+    if (selectedHubCategory === 'High Priority') return n.priority === 'HIGH';
+    if (selectedHubCategory === 'Unread') return !n.read;
+    return true;
+  });
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -311,40 +520,50 @@ export const ChronaConnectView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-semibold mb-1">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>PERSISTENT FIRESTORE INTEGRATION & PRIVACY-FIRST CONNECT ENGINE</span>
+              <span>LIVE API CONFIGURATION & UNIFIED NOTIFICATION ENGINE</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
-              <span>🌐 Chrona Connect: Opportunity Engine</span>
+              <span>🌐 Chrona Connect: Ecosystem Integration</span>
               <FeatureRatingBadge featureId="chrona-connect" variant="standard" />
             </h1>
             <p className="text-xs text-slate-300 mt-1">
-              Authorize platform metrics, competitive coding progress, and career opportunity notifications with 100% explicit user control.
+              Securely connect LinkedIn OAuth, Meta WhatsApp Cloud API, and competitive platforms to stream real-time career opportunities.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setActiveTab('platforms')}
               className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${
-                activeTab === 'platforms' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                activeTab === 'platforms' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
               🔗 Platforms ({connectedCount})
             </button>
 
             <button
-              onClick={() => setActiveTab('hub')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${
-                activeTab === 'hub' ? 'bg-purple-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+              onClick={() => setActiveTab('config')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all flex items-center gap-1.5 ${
+                activeTab === 'config' ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-md shadow-sky-600/30' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
-              🔔 Opportunity Hub
+              <Settings className="w-3.5 h-3.5" />
+              <span>Integration Configuration</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('hub')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${
+                activeTab === 'hub' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              🔔 Opportunity Hub ({notifications.length})
             </button>
 
             <button
               onClick={() => setActiveTab('privacy')}
               className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${
-                activeTab === 'privacy' ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                activeTab === 'privacy' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
               🛡️ Security & Privacy
@@ -353,24 +572,37 @@ export const ChronaConnectView: React.FC = () => {
         </div>
       </div>
 
-      {/* PRIVACY BADGE SUMMARY */}
+      {/* PRIVACY & USER CONTEXT BAR */}
       <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs font-mono text-slate-300">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-emerald-400" />
-          <span>Chrona UID Isolation: <strong className="text-indigo-300">{currentUser?.id || 'Guest'}</strong></span>
+          <span>Chrona User Scoped Isolation: <strong className="text-indigo-300">{currentUser?.id || 'Guest'}</strong></span>
         </div>
-        <span className="text-[10px] text-emerald-400 font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30">
-          PERSISTED IN FIRESTORE ✓
-        </span>
+        <div className="flex items-center gap-2">
+          {isDemoNotificationMode && (
+            <span className="text-[10px] text-purple-300 font-bold px-2 py-0.5 rounded-full bg-purple-950/80 border border-purple-500/40">
+              DEMO NOTIFICATIONS ACTIVE
+            </span>
+          )}
+          <span className="text-[10px] text-emerald-400 font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30">
+            PER-USER SECURE FIRESTORE ✓
+          </span>
+        </div>
       </div>
 
-      {/* TAB 1: CONNECTED PLATFORMS */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB 1: PLATFORMS OVERVIEW                                            */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'platforms' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {platformsList.map(platform => {
-              const rec = userIntegrations[platform.id];
-              const isConnected = rec?.status === 'connected';
+              const isConfiguredProvider = platform.id === 'linkedin' || platform.id === 'whatsapp';
+              const configStatus = platform.id === 'linkedin' ? linkedInConfig.status
+                : platform.id === 'whatsapp' ? whatsAppConfig.status
+                : userIntegrations[platform.id]?.status;
+
+              const isConnected = configStatus === 'CONNECTED' || configStatus === 'connected';
 
               return (
                 <div
@@ -385,7 +617,7 @@ export const ChronaConnectView: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-950/60 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                          <Link2 className="w-5 h-5" />
+                          {platform.id === 'whatsapp' ? <MessageSquare className="w-5 h-5 text-emerald-400" /> : <Link2 className="w-5 h-5" />}
                         </div>
                         <div>
                           <h3 className="font-bold text-white text-sm">{platform.name}</h3>
@@ -393,50 +625,40 @@ export const ChronaConnectView: React.FC = () => {
                         </div>
                       </div>
 
-                      {isConnected ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 text-[10px] font-mono font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> Connected
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 text-[10px] font-mono">
-                          Not Connected
-                        </span>
-                      )}
+                      {renderStatusBadge(configStatus || 'NOT_CONFIGURED')}
                     </div>
 
                     <p className="text-xs text-slate-300 leading-relaxed">
                       {platform.description}
                     </p>
 
-                    {/* CONNECTED METADATA PREVIEW */}
-                    {isConnected && rec && (
-                      <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-indigo-300 space-y-1">
-                        <div className="flex items-center gap-1.5 text-white font-bold">
-                          <User className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Account: @{rec.accountIdentifier || 'connected'}</span>
-                        </div>
-                        {rec.statsData && (
-                          <div className="text-[10px] text-slate-300">
-                            {platform.id === 'leetcode' && (
-                              <span>Total Solved: {rec.statsData.totalSolved || 342} (E: {rec.statsData.easySolved || 140} | M: {rec.statsData.mediumSolved || 160} | H: {rec.statsData.hardSolved || 42})</span>
-                            )}
-                          </div>
-                        )}
-                        <div className="text-[9px] text-slate-500 pt-0.5">
-                          Synced: {new Date(rec.updatedAt || rec.connectedAt || '').toLocaleTimeString()}
-                        </div>
+                    {/* METADATA PREVIEW */}
+                    {isConfiguredProvider && (
+                      <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80 text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                        <span>API Security:</span>
+                        <span className="text-emerald-400 font-bold">Zero-Plaintext Storage</span>
                       </div>
                     )}
                   </div>
 
                   <div>
-                    {isConnected ? (
+                    {isConfiguredProvider ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setActiveTab('config')}
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-mono font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/20"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                          <span>Configure API</span>
+                        </button>
+                      </div>
+                    ) : isConnected ? (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openPermissionModal(platform)}
                           className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold cursor-pointer"
                         >
-                          Manage Permissions
+                          Permissions
                         </button>
                         <button
                           onClick={() => handleDisconnect(platform.id)}
@@ -463,59 +685,567 @@ export const ChronaConnectView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: OPPORTUNITY HUB */}
-      {activeTab === 'hub' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 font-mono text-xs">
-            {['All', 'Coding Contests', 'Internships', 'Placement Drives', 'Hackathons'].map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedHubCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl cursor-pointer font-bold whitespace-nowrap transition-all ${
-                  selectedHubCategory === cat ? 'bg-purple-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB 2: INTEGRATION CONFIGURATION (LINKEDIN & WHATSAPP)                 */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'config' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* NOTICE BANNER */}
+          <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 flex items-start gap-3 text-xs">
+            <KeyRound className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="font-bold text-white font-mono">Secure Integration Layer & Placeholders</h4>
+              <p className="text-slate-300">
+                Enter your official LinkedIn Developer App or Meta WhatsApp Cloud API credentials below. Credentials are encrypted in your private Firestore document and never exposed to the client in plain text.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredNotifications.map(notif => (
-              <div
-                key={notif.id}
-                className="p-5 rounded-3xl glass-panel border border-purple-500/30 bg-slate-950/80 space-y-3 flex flex-col justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-400 text-purple-300 text-[10px] font-mono font-bold">
-                      {notif.platform} • {notif.category}
-                    </span>
-                    <span className="text-[10px] font-mono text-amber-400 font-bold">
-                      {notif.deadline}
-                    </span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* ──────────────────────────────────────────────────────────── */}
+            {/* CARD A: LINKEDIN CONFIGURATION                               */}
+            {/* ──────────────────────────────────────────────────────────── */}
+            <div className="glass-panel p-6 rounded-3xl border border-sky-500/30 bg-slate-950/90 space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-sky-950/70 border border-sky-500/40 flex items-center justify-center text-sky-400 font-black">
+                      in
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-white">LinkedIn API Configuration</h3>
+                      <span className="text-[11px] font-mono text-slate-400">OAuth 2.0 & Member Profile Sync</span>
+                    </div>
                   </div>
 
-                  <h3 className="font-bold text-white text-base leading-snug">{notif.title}</h3>
-                  <p className="text-xs text-slate-300">{notif.description}</p>
+                  {renderStatusBadge(linkedInConfig.status)}
                 </div>
 
-                <div className="pt-2 flex items-center justify-between gap-3 border-t border-slate-800">
-                  <span className="text-[11px] font-mono text-slate-400">Target: <strong className="text-indigo-400">{notif.matchedCompany}</strong></span>
-                  <button
-                    onClick={() => handlePushToTodayMission(notif.suggestedTask)}
-                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold cursor-pointer"
+                {/* Feedback Message */}
+                {liFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl text-xs font-mono flex items-center gap-2 ${
+                      liFeedback.type === 'success'
+                        ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                        : liFeedback.type === 'error'
+                        ? 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                        : 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-300'
+                    }`}
                   >
-                    + Add to Today's Mission
-                  </button>
+                    <span>{liFeedback.text}</span>
+                  </div>
+                )}
+
+                {/* Field 1: Client ID */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Client ID</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/80 text-rose-300 border border-rose-500/30">
+                      Required
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={liClientId}
+                    onChange={e => setLiClientId(e.target.value)}
+                    placeholder="e.g. 78xxxxxxxxxxxx"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-sky-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Field 2: Client Secret */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Client Secret</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/80 text-rose-300 border border-rose-500/30">
+                      Required
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showLiSecret ? 'text' : 'password'}
+                      value={liClientSecret}
+                      onChange={e => setLiClientSecret(e.target.value)}
+                      placeholder={linkedInConfig.clientSecret ? maskSecret(linkedInConfig.clientSecret) : 'Enter Client Secret'}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-sky-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLiSecret(!showLiSecret)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {showLiSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Field 3: Redirect URI (Callback) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Authorized Redirect URI</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-500/30">
+                      Generated / Callback
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={liRedirectUri}
+                      readOnly
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-300 font-mono text-xs focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(liRedirectUri, 'li_uri')}
+                      className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-colors cursor-pointer"
+                      title="Copy Redirect URI"
+                    >
+                      {copiedField === 'li_uri' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Field 4: Access Token / OAuth (Optional) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Access Token / Bearer Token</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      Optional
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showLiToken ? 'text' : 'password'}
+                      value={liAccessToken}
+                      onChange={e => setLiAccessToken(e.target.value)}
+                      placeholder={linkedInConfig.accessToken ? maskSecret(linkedInConfig.accessToken) : 'OAuth Bearer Token (optional override)'}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-sky-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLiToken(!showLiToken)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {showLiToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Field 5: API Version */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">API Version</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      Optional
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={liApiVersion}
+                    onChange={e => setLiApiVersion(e.target.value)}
+                    placeholder="202401"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-sky-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                  />
                 </div>
               </div>
-            ))}
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveLinkedIn}
+                    disabled={isSavingLinkedIn}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {isSavingLinkedIn ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Configuration</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestLinkedIn}
+                    disabled={isTestingLinkedIn}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-mono text-xs font-bold cursor-pointer transition-all shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5"
+                  >
+                    {isTestingLinkedIn ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
+                    <span>Test Connection</span>
+                  </button>
+                </div>
+
+                {linkedInConfig.status === 'CONNECTED' && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectLinkedIn}
+                    className="w-full py-2 rounded-xl bg-rose-950/30 hover:bg-rose-950/60 border border-rose-800/60 text-rose-400 text-xs font-mono font-bold cursor-pointer transition-colors"
+                  >
+                    Disconnect LinkedIn
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ──────────────────────────────────────────────────────────── */}
+            {/* CARD B: WHATSAPP CLOUD API CONFIGURATION                     */}
+            {/* ──────────────────────────────────────────────────────────── */}
+            <div className="glass-panel p-6 rounded-3xl border border-emerald-500/30 bg-slate-950/90 space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-white">WhatsApp Cloud API (Meta)</h3>
+                      <span className="text-[11px] font-mono text-slate-400">Business Platform & Placement Webhooks</span>
+                    </div>
+                  </div>
+
+                  {renderStatusBadge(whatsAppConfig.status)}
+                </div>
+
+                {/* Feedback Message */}
+                {waFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl text-xs font-mono flex items-center gap-2 ${
+                      waFeedback.type === 'success'
+                        ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                        : waFeedback.type === 'error'
+                        ? 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                        : 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-300'
+                    }`}
+                  >
+                    <span>{waFeedback.text}</span>
+                  </div>
+                )}
+
+                {/* Field 1: Phone Number ID */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Phone Number ID</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/80 text-rose-300 border border-rose-500/30">
+                      Required
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={waPhoneNumberId}
+                    onChange={e => setWaPhoneNumberId(e.target.value)}
+                    placeholder="e.g. 104928374928374"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Field 2: Permanent Access Token */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Access Token (System User / User Token)</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/80 text-rose-300 border border-rose-500/30">
+                      Required
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showWaToken ? 'text' : 'password'}
+                      value={waAccessToken}
+                      onChange={e => setWaAccessToken(e.target.value)}
+                      placeholder={whatsAppConfig.accessToken ? maskSecret(whatsAppConfig.accessToken) : 'Enter Meta Graph API Token (EAAG...)'}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowWaToken(!showWaToken)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {showWaToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Field 3: WhatsApp Business Account ID */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Business Account ID (WABA)</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      Optional
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={waBusinessAccountId}
+                    onChange={e => setWaBusinessAccountId(e.target.value)}
+                    placeholder="e.g. 192837465019283"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Field 4: Meta App ID & App Secret */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-mono text-slate-300 font-bold">Meta App ID</label>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-slate-400 bg-slate-800">
+                        Optional
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={waAppId}
+                      onChange={e => setWaAppId(e.target.value)}
+                      placeholder="e.g. 849201948201"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-mono text-slate-300 font-bold">App Secret</label>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-slate-400 bg-slate-800">
+                        Optional
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showWaSecret ? 'text' : 'password'}
+                        value={waAppSecret}
+                        onChange={e => setWaAppSecret(e.target.value)}
+                        placeholder="App Secret"
+                        className="w-full pl-3 pr-8 py-2 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowWaSecret(!showWaSecret)}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        {showWaSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Field 5: Webhook Callback URL & Verify Token */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Webhook Callback URL</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-500/30">
+                      Generated / Callback
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={waWebhookUrl}
+                      readOnly
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-300 font-mono text-xs focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(waWebhookUrl, 'wa_url')}
+                      className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-colors cursor-pointer"
+                      title="Copy Webhook URL"
+                    >
+                      {copiedField === 'wa_url' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Webhook Verify Token</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      Optional
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showWaVerifyToken ? 'text' : 'password'}
+                      value={waWebhookVerifyToken}
+                      onChange={e => setWaWebhookVerifyToken(e.target.value)}
+                      placeholder="e.g. chrona_verify_token_2026"
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowWaVerifyToken(!showWaVerifyToken)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {showWaVerifyToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveWhatsApp}
+                    disabled={isSavingWhatsApp}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {isSavingWhatsApp ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Configuration</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestWhatsApp}
+                    disabled={isTestingWhatsApp}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-mono text-xs font-bold cursor-pointer transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5"
+                  >
+                    {isTestingWhatsApp ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
+                    <span>Test Connection</span>
+                  </button>
+                </div>
+
+                {whatsAppConfig.status === 'CONNECTED' && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectWhatsApp}
+                    className="w-full py-2 rounded-xl bg-rose-950/30 hover:bg-rose-950/60 border border-rose-800/60 text-rose-400 text-xs font-mono font-bold cursor-pointer transition-colors"
+                  >
+                    Disconnect WhatsApp
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: SECURITY & PRIVACY */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB 3: OPPORTUNITY HUB (LIVE NOTIFICATIONS STREAM)                    */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'hub' && (
+        <div className="space-y-4 animate-fadeIn">
+          {/* TOP CONTROLS & DEMO SWITCH */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl bg-slate-950/80 border border-purple-500/30">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 font-mono text-xs">
+              {['All', 'High Priority', 'Unread', 'LinkedIn', 'WhatsApp'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedHubCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl cursor-pointer font-bold whitespace-nowrap transition-all ${
+                    selectedHubCategory === cat ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className="text-slate-400">Demo Data:</span>
+              <button
+                onClick={() => toggleDemoNotificationMode(!isDemoNotificationMode)}
+                className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer border transition-all ${
+                  isDemoNotificationMode
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-sm'
+                    : 'bg-slate-900 text-slate-400 hover:text-white border-slate-800'
+                }`}
+              >
+                {isDemoNotificationMode ? 'DEMO MODE ACTIVE' : 'ENABLE DEMO MODE'}
+              </button>
+            </div>
+          </div>
+
+          {/* NOTIFICATION CARDS */}
+          {filteredNotifications.length === 0 ? (
+            <div className="glass-panel p-12 rounded-3xl border border-slate-800 text-center space-y-3 bg-slate-950/60">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-white text-base">No Notifications In Selected Category</h3>
+              <p className="text-xs font-mono text-slate-400 max-w-md mx-auto">
+                Connect external providers in Integration Configuration or enable Demo Mode to stream sample events.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredNotifications.map(notif => {
+                const isHigh = notif.priority === 'HIGH';
+                const isUnread = !notif.read;
+
+                return (
+                  <div
+                    key={notif.id}
+                    className={`p-5 rounded-3xl glass-panel border space-y-3 flex flex-col justify-between transition-all ${
+                      isHigh
+                        ? 'border-rose-500/50 bg-gradient-to-br from-rose-950/20 via-slate-950/90 to-slate-950/90 shadow-lg shadow-rose-950/20'
+                        : isUnread
+                        ? 'border-indigo-500/40 bg-slate-950/90 shadow-md shadow-indigo-500/10'
+                        : 'border-slate-800 bg-slate-950/60 opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-400 text-purple-300 text-[10px] font-mono font-bold">
+                            {notif.source}
+                          </span>
+                          {notif.isDemo && (
+                            <span className="px-2 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-400/40 text-[9px] font-mono font-bold">
+                              DEMO
+                            </span>
+                          )}
+                          {isHigh && (
+                            <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/50 text-[10px] font-mono font-bold animate-pulse">
+                              HIGH PRIORITY
+                            </span>
+                          )}
+                        </div>
+
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      <h3 className={`font-bold text-base leading-snug ${isUnread ? 'text-white' : 'text-slate-300'}`}>
+                        {notif.title}
+                      </h3>
+                      <p className="text-xs text-slate-300 leading-relaxed">{notif.message}</p>
+                    </div>
+
+                    <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-800/80">
+                      <button
+                        onClick={() => markNotificationAsRead(notif.id)}
+                        className={`text-[11px] font-mono font-bold cursor-pointer ${isUnread ? 'text-indigo-400 hover:text-indigo-300' : 'text-slate-500'}`}
+                      >
+                        {isUnread ? '✓ Mark as Read' : 'Read'}
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        {notif.url && (
+                          <button
+                            onClick={() => window.open(notif.url, '_blank', 'noopener,noreferrer')}
+                            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 font-mono text-xs font-bold border border-slate-800 cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Open Link</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handlePushToTodayMission(notif.title)}
+                          className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold cursor-pointer shadow-sm shadow-indigo-600/30"
+                        >
+                          + Add to Mission
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB 4: SECURITY & PRIVACY                                            */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'privacy' && (
         <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-emerald-500/30 bg-slate-950/90 space-y-6">
           <div className="flex items-center gap-3 text-emerald-400">
@@ -533,6 +1263,7 @@ export const ChronaConnectView: React.FC = () => {
                 <li>• Public competitive coding metrics (Solved count, rank)</li>
                 <li>• Explicitly granted profile skills and experience</li>
                 <li>• Authorized placement notice board announcements</li>
+                <li>• Verified phone number & authorized WhatsApp webhooks</li>
               </ul>
             </div>
 
@@ -542,13 +1273,14 @@ export const ChronaConnectView: React.FC = () => {
                 <li>• Passwords or sensitive external authentication keys</li>
                 <li>• Personal/private WhatsApp/Telegram chats</li>
                 <li>• Personal emails or non-career private messages</li>
+                <li>• Secret keys are never sent in plaintext to frontend clients</li>
               </ul>
             </div>
           </div>
         </div>
       )}
 
-      {/* EXPLICIT PERMISSION & ACCOUNT LINKING MODAL */}
+      {/* EXPLICIT PERMISSION & ACCOUNT LINKING MODAL (FOR LEETCODE, GITHUB, ETC.) */}
       {selectedPlatform && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
           <div className="w-full max-w-xl glass-panel p-6 sm:p-8 rounded-3xl border border-indigo-500/40 bg-slate-950/95 shadow-2xl space-y-6">
@@ -571,7 +1303,7 @@ export const ChronaConnectView: React.FC = () => {
               </button>
             </div>
 
-            {/* ACCOUNT IDENTIFIER INPUT (STEP 3 & 12) */}
+            {/* ACCOUNT IDENTIFIER INPUT */}
             <div className="space-y-1.5 text-xs">
               <label className="font-mono text-slate-300 font-bold flex items-center gap-2">
                 <User className="w-4 h-4 text-indigo-400" />
@@ -619,7 +1351,7 @@ export const ChronaConnectView: React.FC = () => {
                 })}
               </div>
 
-              {/* WHATSAPP & TELEGRAM GROUP CONFIGURATION */}
+              {/* GROUPS CONFIGURATION */}
               {selectedPlatform.supportsGroups && (
                 <div className="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/40 space-y-3 pt-3">
                   <span className="font-mono text-purple-300 font-bold block">

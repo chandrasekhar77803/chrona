@@ -19,8 +19,31 @@ import type {
   UserDataStore,
   AIRationale,
   ChatMessage,
-  SmartestAction
+  SmartestAction,
+  ChronaNotification,
+  LinkedInIntegrationConfig,
+  WhatsAppIntegrationConfig
 } from '../types/chrona';
+import {
+  getLinkedInConfig,
+  saveLinkedInConfig,
+  getWhatsAppConfig,
+  saveWhatsAppConfig,
+  testLinkedInConnection,
+  testWhatsAppConnection,
+  subscribeUserNotifications,
+  markNotificationAsReadInFirestore,
+  markAllNotificationsAsReadInFirestore,
+  deleteNotificationFromFirestore,
+  clearAllNotificationsFromFirestore,
+  syncProviderIntegration,
+  disconnectProviderIntegration,
+  populateDemoNotifications,
+  removeDemoNotifications,
+  DEFAULT_LINKEDIN_CONFIG,
+  DEFAULT_WHATSAPP_CONFIG,
+  type ConnectionTestResult
+} from '../services/apiIntegrationService';
 import {
   getUserDataStore,
   saveUserDataStore,
@@ -107,6 +130,26 @@ interface ChronaContextType {
   userIntegrations: Record<string, UserIntegrationRecord>;
   connectUserIntegration: (provider: string, accountIdentifier: string, scopes: string[], statsData?: any) => Promise<UserIntegrationRecord | null>;
   disconnectUserIntegration: (provider: string) => Promise<void>;
+
+  // LIVE NOTIFICATION CENTER & CHRONA CONNECT
+  notifications: ChronaNotification[];
+  unreadNotificationsCount: number;
+  isDemoNotificationMode: boolean;
+  toggleDemoNotificationMode: (enabled: boolean) => Promise<void>;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
+
+  // API CONFIGURATION SUITE
+  linkedInConfig: LinkedInIntegrationConfig;
+  whatsAppConfig: WhatsAppIntegrationConfig;
+  saveLinkedInSettings: (cfg: Partial<LinkedInIntegrationConfig>) => Promise<LinkedInIntegrationConfig>;
+  saveWhatsAppSettings: (cfg: Partial<WhatsAppIntegrationConfig>) => Promise<WhatsAppIntegrationConfig>;
+  testLinkedIn: (config?: LinkedInIntegrationConfig) => Promise<ConnectionTestResult>;
+  testWhatsApp: (config?: WhatsAppIntegrationConfig) => Promise<ConnectionTestResult>;
+  syncProvider: (provider: 'linkedin' | 'whatsapp') => Promise<{ success: boolean; count: number; message: string }>;
+  disconnectProvider: (provider: 'linkedin' | 'whatsapp') => Promise<void>;
 
   saveWellbeingCheckin: (checkin: WellbeingCheckin) => void;
 
@@ -330,9 +373,26 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // User Integrations State
   const [userIntegrations, setUserIntegrations] = useState<Record<string, UserIntegrationRecord>>({});
 
+  // Live Notifications State
+  const [notifications, setNotifications] = useState<ChronaNotification[]>([]);
+  const [isDemoNotificationMode, setIsDemoNotificationMode] = useState<boolean>(() => {
+    return localStorage.getItem('chrona_demo_notif_mode') === 'true';
+  });
+
+  // Specific API Integration Configurations
+  const [linkedInConfig, setLinkedInConfig] = useState<LinkedInIntegrationConfig>(DEFAULT_LINKEDIN_CONFIG);
+  const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppIntegrationConfig>(DEFAULT_WHATSAPP_CONFIG);
+
+  const unreadNotificationsCount = useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
+
   useEffect(() => {
     if (!currentUser) {
       setUserIntegrations({});
+      setNotifications([]);
+      setLinkedInConfig(DEFAULT_LINKEDIN_CONFIG);
+      setWhatsAppConfig(DEFAULT_WHATSAPP_CONFIG);
       setMissions([]);
       setRoadmapNodes([]);
       setSkillGaps([]);
@@ -387,18 +447,22 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActiveSmartestIndex(store.activeSmartestActionIndex || 0);
 
         // Fetch user-isolated records from Cloud Firestore (where userId == auth.currentUser.uid)
-        const [fsGoals, fsMissions, fsDocs, fsNotes, fsGps, fsProfile] = await Promise.all([
+        const [fsGoals, fsMissions, fsDocs, fsNotes, fsGps, fsProfile, lnkCfg, waCfg] = await Promise.all([
           getUserGoalsFromFirestore(currentUser.id),
           getUserMissionsFromFirestore(currentUser.id),
           getUserStudyDocumentsFromFirestore(currentUser.id),
           getUserSmartNotesFromFirestore(currentUser.id),
           getCareerGpsFromFirestore(currentUser.id),
-          getUserProfile(currentUser.id)
+          getUserProfile(currentUser.id),
+          getLinkedInConfig(currentUser.id),
+          getWhatsAppConfig(currentUser.id)
         ]);
 
         setGoals(fsGoals);
         setMissions(fsMissions);
         setStudyDocuments(fsDocs);
+        setLinkedInConfig(lnkCfg);
+        setWhatsAppConfig(waCfg);
         if (fsNotes.length > 0) {
           setSmartNoteLectures(fsNotes as any);
         }
@@ -433,7 +497,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
 
-        loadUserWorkspace();
+    loadUserWorkspace();
 
     const unsubscribeNotes = listenUserSmartNotes(currentUser.id, (notes) => {
       if (notes) {
@@ -445,9 +509,14 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setUserIntegrations(records);
     });
 
+    const unsubscribeNotifications = subscribeUserNotifications(currentUser.id, (notifList) => {
+      setNotifications(notifList);
+    });
+
     return () => {
       if (unsubscribeNotes) unsubscribeNotes();
       if (unsubscribeIntegrations) unsubscribeIntegrations();
+      if (unsubscribeNotifications) unsubscribeNotifications();
     };
   }, [currentUser]);
 
@@ -878,6 +947,99 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // ── LIVE NOTIFICATION ACTIONS ──
+  const markNotificationAsRead = async (id: string) => {
+    if (!currentUser) return;
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    await markNotificationAsReadInFirestore(currentUser.id, id);
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    if (!currentUser) return;
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await markAllNotificationsAsReadInFirestore(currentUser.id, unreadIds);
+  };
+
+  const deleteNotification = async (id: string) => {
+    if (!currentUser) return;
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    await deleteNotificationFromFirestore(currentUser.id, id);
+  };
+
+  const clearAllNotifications = async () => {
+    if (!currentUser) return;
+    setNotifications([]);
+    await clearAllNotificationsFromFirestore(currentUser.id);
+  };
+
+  const toggleDemoNotificationMode = async (enabled: boolean) => {
+    setIsDemoNotificationMode(enabled);
+    localStorage.setItem('chrona_demo_notif_mode', enabled ? 'true' : 'false');
+    if (!currentUser) return;
+    if (enabled) {
+      await populateDemoNotifications(currentUser.id);
+    } else {
+      await removeDemoNotifications(currentUser.id);
+    }
+  };
+
+  // ── API INTEGRATION CONFIGURATION ACTIONS ──
+  const saveLinkedInSettings = async (cfg: Partial<LinkedInIntegrationConfig>): Promise<LinkedInIntegrationConfig> => {
+    if (!currentUser) return DEFAULT_LINKEDIN_CONFIG;
+    const updated = await saveLinkedInConfig(currentUser.id, cfg);
+    setLinkedInConfig(updated);
+    return updated;
+  };
+
+  const saveWhatsAppSettings = async (cfg: Partial<WhatsAppIntegrationConfig>): Promise<WhatsAppIntegrationConfig> => {
+    if (!currentUser) return DEFAULT_WHATSAPP_CONFIG;
+    const updated = await saveWhatsAppConfig(currentUser.id, cfg);
+    setWhatsAppConfig(updated);
+    return updated;
+  };
+
+  const testLinkedIn = async (config?: LinkedInIntegrationConfig): Promise<ConnectionTestResult> => {
+    if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
+    const res = await testLinkedInConnection(currentUser.id, config || linkedInConfig);
+    const updated = await getLinkedInConfig(currentUser.id);
+    setLinkedInConfig(updated);
+    return res;
+  };
+
+  const testWhatsApp = async (config?: WhatsAppIntegrationConfig): Promise<ConnectionTestResult> => {
+    if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
+    const res = await testWhatsAppConnection(currentUser.id, config || whatsAppConfig);
+    const updated = await getWhatsAppConfig(currentUser.id);
+    setWhatsAppConfig(updated);
+    return res;
+  };
+
+  const syncProvider = async (provider: 'linkedin' | 'whatsapp'): Promise<{ success: boolean; count: number; message: string }> => {
+    if (!currentUser) return { success: false, count: 0, message: 'User not logged in' };
+    const res = await syncProviderIntegration(currentUser.id, provider);
+    if (provider === 'linkedin') {
+      const updated = await getLinkedInConfig(currentUser.id);
+      setLinkedInConfig(updated);
+    } else {
+      const updated = await getWhatsAppConfig(currentUser.id);
+      setWhatsAppConfig(updated);
+    }
+    return res;
+  };
+
+  const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp'): Promise<void> => {
+    if (!currentUser) return;
+    await disconnectProviderIntegration(currentUser.id, provider);
+    if (provider === 'linkedin') {
+      const updated = await getLinkedInConfig(currentUser.id);
+      setLinkedInConfig(updated);
+    } else {
+      const updated = await getWhatsAppConfig(currentUser.id);
+      setWhatsAppConfig(updated);
+    }
+  };
+
   const saveWellbeingCheckin = async (checkin: WellbeingCheckin) => {
     if (!currentUser) return;
     try {
@@ -1142,6 +1304,22 @@ BEHAVIOR INSTRUCTIONS:
         userIntegrations,
         connectUserIntegration,
         disconnectUserIntegration,
+        notifications,
+        unreadNotificationsCount,
+        isDemoNotificationMode,
+        toggleDemoNotificationMode,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        deleteNotification,
+        clearAllNotifications,
+        linkedInConfig,
+        whatsAppConfig,
+        saveLinkedInSettings,
+        saveWhatsAppSettings,
+        testLinkedIn,
+        testWhatsApp,
+        syncProvider,
+        disconnectProvider: disconnectProviderAction,
         saveWellbeingCheckin,
         isFocusBubbleActive,
         toggleFocusBubble,
