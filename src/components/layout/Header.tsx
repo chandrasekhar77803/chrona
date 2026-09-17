@@ -109,7 +109,7 @@ export const Header: React.FC = () => {
           <span>Focus Bubble</span>
         </button>
 
-        {/* UNIFIED NOTIFICATION CENTER */}
+        {/* CHRONA UNIFIED LIVE NOTIFICATION CENTER BELL */}
         <NotificationCenter />
 
         {/* TOP-RIGHT USER AVATAR DROPDOWN MENU */}

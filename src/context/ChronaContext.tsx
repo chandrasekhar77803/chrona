@@ -37,6 +37,8 @@ import {
   deleteNotificationFromFirestore,
   clearAllNotificationsFromFirestore,
   syncProviderIntegration,
+  syncProviderNotifications,
+  syncAllConnectedIntegrations,
   disconnectProviderIntegration,
   populateDemoNotifications,
   removeDemoNotifications,
@@ -149,6 +151,7 @@ interface ChronaContextType {
   testLinkedIn: (config?: LinkedInIntegrationConfig) => Promise<ConnectionTestResult>;
   testWhatsApp: (config?: WhatsAppIntegrationConfig) => Promise<ConnectionTestResult>;
   syncProvider: (provider: 'linkedin' | 'whatsapp') => Promise<{ success: boolean; count: number; message: string }>;
+  syncIntegrationNotifications: (provider: string) => Promise<{ success: boolean; count: number; message: string }>;
   disconnectProvider: (provider: 'linkedin' | 'whatsapp') => Promise<void>;
 
   saveWellbeingCheckin: (checkin: WellbeingCheckin) => void;
@@ -513,10 +516,18 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setNotifications(notifList);
     });
 
+    // Periodic near-realtime sync for active integrations (60 seconds)
+    const backgroundSyncTimer = setInterval(() => {
+      if (currentUser?.id) {
+        syncAllConnectedIntegrations(currentUser.id).catch(() => {});
+      }
+    }, 60000);
+
     return () => {
       if (unsubscribeNotes) unsubscribeNotes();
       if (unsubscribeIntegrations) unsubscribeIntegrations();
       if (unsubscribeNotifications) unsubscribeNotifications();
+      clearInterval(backgroundSyncTimer);
     };
   }, [currentUser]);
 
@@ -930,11 +941,15 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await syncLeetCodeStats(accountIdentifier);
     }
 
+    // Immediately synchronize initial authorized notifications into Firestore
+    await syncProviderNotifications(currentUser.id, provider, accountIdentifier);
+
     return record;
   };
 
   const disconnectUserIntegration = async (provider: string): Promise<void> => {
     if (!currentUser) return;
+    await disconnectProviderIntegration(currentUser.id, provider);
     await disconnectProvider(currentUser.id, provider);
     setUserIntegrations(prev => {
       const copy = { ...prev };
@@ -1026,6 +1041,12 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setWhatsAppConfig(updated);
     }
     return res;
+  };
+
+  const syncIntegrationNotifications = async (provider: string): Promise<{ success: boolean; count: number; message: string }> => {
+    if (!currentUser) return { success: false, count: 0, message: 'User not logged in' };
+    const activeIdentifier = userIntegrations[provider]?.accountIdentifier;
+    return await syncProviderNotifications(currentUser.id, provider, activeIdentifier);
   };
 
   const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp'): Promise<void> => {
@@ -1319,6 +1340,7 @@ BEHAVIOR INSTRUCTIONS:
         testLinkedIn,
         testWhatsApp,
         syncProvider,
+        syncIntegrationNotifications,
         disconnectProvider: disconnectProviderAction,
         saveWellbeingCheckin,
         isFocusBubbleActive,

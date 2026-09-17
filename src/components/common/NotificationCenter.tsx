@@ -24,7 +24,7 @@ export const NotificationCenter: React.FC = () => {
   } = useChrona();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'UNREAD' | 'HIGH' | 'LINKEDIN' | 'WHATSAPP'>('ALL');
+  const [selectedFilter, setSelectedFilter] = useState<string>('ALL');
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Close dropdown when clicking outside
@@ -38,12 +38,14 @@ export const NotificationCenter: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Compute dynamic distinct source tabs
+  const distinctSources = Array.from(new Set(notifications.map(n => n.source))).filter(Boolean);
+
   const filteredNotifications = notifications.filter(n => {
+    if (selectedFilter === 'ALL') return true;
     if (selectedFilter === 'UNREAD') return !n.read;
     if (selectedFilter === 'HIGH') return n.priority === 'HIGH';
-    if (selectedFilter === 'LINKEDIN') return n.source.toLowerCase().includes('linkedin');
-    if (selectedFilter === 'WHATSAPP') return n.source.toLowerCase().includes('whatsapp');
-    return true;
+    return n.source.toLowerCase() === selectedFilter.toLowerCase();
   });
 
   const handleNotificationClick = async (notif: ChronaNotification) => {
@@ -97,6 +99,30 @@ export const NotificationCenter: React.FC = () => {
     } else if (s.includes('leetcode')) {
       bg = 'bg-amber-950/80 text-amber-300 border-amber-500/40';
       icon = '🟧';
+    } else if (s.includes('github')) {
+      bg = 'bg-purple-950/80 text-purple-300 border-purple-500/40';
+      icon = '🐱';
+    } else if (s.includes('hackerrank')) {
+      bg = 'bg-teal-950/80 text-teal-300 border-teal-500/40';
+      icon = '🟩';
+    } else if (s.includes('codechef')) {
+      bg = 'bg-orange-950/80 text-orange-300 border-orange-500/40';
+      icon = '🟤';
+    } else if (s.includes('codeforces')) {
+      bg = 'bg-blue-950/80 text-blue-300 border-blue-500/40';
+      icon = '🔵';
+    } else if (s.includes('gmail')) {
+      bg = 'bg-rose-950/80 text-rose-300 border-rose-500/40';
+      icon = '🔴';
+    } else if (s.includes('calendar') || s.includes('gcalendar')) {
+      bg = 'bg-indigo-950/80 text-indigo-300 border-indigo-500/40';
+      icon = '📅';
+    } else if (s.includes('outlook')) {
+      bg = 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40';
+      icon = '📧';
+    } else if (s.includes('telegram')) {
+      bg = 'bg-sky-950/80 text-sky-300 border-sky-500/40';
+      icon = '✈️';
     }
 
     return (
@@ -224,26 +250,51 @@ export const NotificationCenter: React.FC = () => {
           </div>
 
           {/* FILTER PILLS */}
-          <div className="p-2 border-b border-slate-800/80 bg-slate-950/60 flex items-center gap-1.5 overflow-x-auto text-[11px] font-mono">
-            {(
-              [
-                { id: 'ALL', label: 'All' },
-                { id: 'UNREAD', label: `Unread (${unreadNotificationsCount})` },
-                { id: 'HIGH', label: 'High Priority' },
-                { id: 'LINKEDIN', label: 'LinkedIn' },
-                { id: 'WHATSAPP', label: 'WhatsApp' }
-              ] as const
-            ).map(tab => (
+          <div className="p-2 border-b border-slate-800/80 bg-slate-950/60 flex items-center gap-1.5 overflow-x-auto text-[11px] font-mono no-scrollbar">
+            <button
+              onClick={() => setSelectedFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                selectedFilter === 'ALL'
+                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              All ({notifications.length})
+            </button>
+
+            <button
+              onClick={() => setSelectedFilter('UNREAD')}
+              className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                selectedFilter === 'UNREAD'
+                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              Unread ({unreadNotificationsCount})
+            </button>
+
+            <button
+              onClick={() => setSelectedFilter('HIGH')}
+              className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                selectedFilter === 'HIGH'
+                  ? 'bg-rose-600 text-white font-bold shadow-sm'
+                  : 'bg-slate-900/80 text-rose-300/80 hover:text-rose-200 hover:bg-slate-800'
+              }`}
+            >
+              High Priority
+            </button>
+
+            {distinctSources.map(source => (
               <button
-                key={tab.id}
-                onClick={() => setSelectedFilter(tab.id)}
+                key={source}
+                onClick={() => setSelectedFilter(source)}
                 className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-all cursor-pointer ${
-                  selectedFilter === tab.id
+                  selectedFilter.toLowerCase() === source.toLowerCase()
                     ? 'bg-indigo-600 text-white font-bold shadow-sm'
                     : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                {tab.label}
+                {source}
               </button>
             ))}
           </div>

@@ -604,7 +604,7 @@ export type NotificationPriority = 'HIGH' | 'MEDIUM' | 'NORMAL';
 export interface ChronaNotification {
   id: string;
   userId: string;
-  source: 'LinkedIn' | 'WhatsApp' | 'LeetCode' | 'System' | 'Campus' | 'GitHub';
+  source: 'LinkedIn' | 'WhatsApp' | 'LeetCode' | 'GitHub' | 'HackerRank' | 'CodeChef' | 'Codeforces' | 'Gmail' | 'Google Calendar' | 'Outlook' | 'Telegram' | 'System' | 'Campus' | string;
   integrationId: string; // 'linkedin' | 'whatsapp' | 'leetcode' etc.
   type: 'activity' | 'message' | 'announcement' | 'career_opportunity' | 'sync_status' | 'alert';
   title: string;
