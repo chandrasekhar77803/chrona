@@ -16,6 +16,7 @@ import { CareerGpsView } from './components/career-gps/CareerGpsView';
 import { PlacementHubView } from './components/placement/PlacementHubView';
 import { CareerSetupWizardPage } from './components/career-gps/CareerSetupWizardPage';
 import { StudyCompanionView } from './components/study-companion/StudyCompanionView';
+import { LearnCoursesView } from './components/courses/LearnCoursesView';
 import { SmartNotesView } from './components/smart-notes/SmartNotesView';
 import { MockInterviewsView } from './components/mock-interviews/MockInterviewsView';
 import { FocusBubbleView } from './components/focus-bubble/FocusBubbleView';
@@ -66,6 +67,8 @@ const MainContent: React.FC = () => {
         return <PlacementHubView />;
       case 'study-companion':
         return <StudyCompanionView />;
+      case 'courses':
+        return <LearnCoursesView />;
       case 'smart-notes':
         return <SmartNotesView />;
       case 'mock-interviews':

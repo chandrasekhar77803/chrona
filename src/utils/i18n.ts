@@ -29,6 +29,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     chronaConnect: 'Chrona Connect',
     careerGps: 'Career GPS',
     aiStudyCompanion: 'AI Study Companion',
+    learnCourses: 'Learn Courses',
     smartNotes: 'Smart Notes',
     mockInterviews: 'Mock Interviews',
     focusBubble: 'Focus Bubble',

@@ -4,6 +4,7 @@ export type NavSection =
   | 'career-gps'
   | 'placement-hub'
   | 'study-companion'
+  | 'courses'
   | 'smart-notes'
   | 'mock-interviews'
   | 'focus-bubble'

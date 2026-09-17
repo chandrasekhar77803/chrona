@@ -20,7 +20,8 @@ import {
   ChevronRight,
   ShieldAlert,
   Link2,
-  Trophy
+  Trophy,
+  GraduationCap
 } from 'lucide-react';
 
 interface NavItem {
@@ -42,6 +43,7 @@ export const Sidebar: React.FC = () => {
     { id: 'career-gps', labelKey: 'careerGps', defaultLabel: 'Career GPS', icon: Compass, badge: 'Google Maps' },
     { id: 'placement-hub', labelKey: 'placementHub', defaultLabel: 'Placement Hub', icon: Target, badge: 'Placement' },
     { id: 'study-companion', labelKey: 'aiStudyCompanion', defaultLabel: 'AI Study Companion', icon: BookOpen },
+    { id: 'courses', labelKey: 'learnCourses', defaultLabel: 'Learn Courses', icon: GraduationCap, badge: 'Career Skills' },
     { id: 'smart-notes', labelKey: 'smartNotes', defaultLabel: 'Smart Notes', icon: Mic, badge: 'Live Rec' },
     { id: 'mock-interviews', labelKey: 'mockInterviews', defaultLabel: 'Mock Interviews', icon: Video, badge: 'AI Voice' },
     { id: 'focus-bubble', labelKey: 'focusBubble', defaultLabel: 'Focus Bubble', icon: Sparkles, badge: 'Mode' },

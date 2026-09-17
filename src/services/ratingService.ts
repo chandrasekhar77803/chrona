@@ -20,6 +20,7 @@ export type ChronaFeatureId =
   | 'plan-my-day'
   | 'ai-calendar'
   | 'ai-study-companion'
+  | 'learn-courses'
   | 'focus-bubble'
   | 'smart-notes'
   | 'chrona-connect'
@@ -68,6 +69,7 @@ export const INITIAL_FEATURE_CONFIGS: Record<ChronaFeatureId, FeatureRatingInfo>
   'plan-my-day': { featureId: 'plan-my-day', name: 'Plan My Day', defaultRating: 4.5 },
   'ai-calendar': { featureId: 'ai-calendar', name: 'AI Calendar', defaultRating: 4.4 },
   'ai-study-companion': { featureId: 'ai-study-companion', name: 'AI Study Companion', defaultRating: 4.7 },
+  'learn-courses': { featureId: 'learn-courses', name: 'Learn Courses', defaultRating: 4.8 },
   'focus-bubble': { featureId: 'focus-bubble', name: 'Focus Bubble', defaultRating: 4.3 },
   'smart-notes': { featureId: 'smart-notes', name: 'Smart Notes', defaultRating: 4.2 },
   'chrona-connect': { featureId: 'chrona-connect', name: 'Chrona Connect', defaultRating: 4.4 },
