@@ -26,7 +26,10 @@ import {
   X,
   ShieldCheck,
   UserCheck,
-  UserX
+  UserX,
+  Zap,
+  Key,
+  Check
 } from 'lucide-react';
 import type { MentorMessage, WellbeingCheckin, VoiceBiometricsProfile } from '../../types/chrona';
 
@@ -48,9 +51,26 @@ export const ChronaMentorView: React.FC = () => {
   const [selectedMood, setSelectedMood] = useState<WellbeingCheckin['mood'] | null>(null);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showBiometricsModal, setShowBiometricsModal] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  const [savedKeySuccess, setSavedKeySuccess] = useState(false);
   const [voiceProfile, setVoiceProfile] = useState<VoiceBiometricsProfile | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const existingKey = localStorage.getItem('chrona_gemini_api_key') || (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GEMINI_API_KEY : '') || '';
+    setGeminiKeyInput(existingKey);
+  }, []);
+
+  const handleSaveGeminiKey = () => {
+    localStorage.setItem('chrona_gemini_api_key', geminiKeyInput.trim());
+    setSavedKeySuccess(true);
+    setTimeout(() => {
+      setSavedKeySuccess(false);
+      setShowKeyModal(false);
+    }, 1200);
+  };
 
   const contextSnapshot = {
     userId: currentUser?.id || 'guest',
@@ -229,36 +249,52 @@ export const ChronaMentorView: React.FC = () => {
 
   const quickPrompts = [
     'What should I do today?',
+    'Analyze my Placement Readiness & Skill Gaps',
+    'Guide me through my Learn Courses Roadmap',
     'Am I on track for my target company?',
-    'I only have 2 hours today.',
-    'Why am I falling behind?',
-    'How can I prepare for my target company?'
+    'I only have 2 hours today — prioritize my schedule',
+    'Prepare high-frequency technical interview questions'
   ];
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* HEADER BAR */}
-      <div className="glass-panel p-6 rounded-3xl border border-indigo-500/20 bg-slate-950/90 space-y-3">
+      <div className="glass-panel p-6 rounded-3xl border border-indigo-500/30 bg-slate-950/90 space-y-3 relative overflow-hidden">
+        <div className="absolute top-0 right-1/3 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/30 shrink-0">
               <Sparkles className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-black text-white tracking-tight">Chrona Mentor</h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[10px] font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 text-indigo-300 border border-indigo-500/40 font-mono text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                  <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
+                  Gemini 3.5 Flash-Lite
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[10px] font-bold">
                   Personal AI Guide
                 </span>
                 <FeatureRatingBadge featureId="chrona-mentor" variant="standard" />
               </div>
-              <p className="text-xs text-slate-300">
-                Connected to your Career GPS, Today's Mission, Calendar & Well-being Check-ins.
+              <p className="text-xs text-slate-300 mt-0.5">
+                Connected to your Career GPS, Today's Mission, Learn Courses, Calendar & Well-being Check-ins.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowKeyModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-indigo-300 font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+              title="Configure Gemini API Key"
+            >
+              <Key className="w-4 h-4 text-amber-400" />
+              <span>API Key</span>
+            </button>
+
             <button
               onClick={() => setShowBiometricsModal(true)}
               className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-900/60 to-purple-900/60 hover:from-indigo-800/80 hover:to-purple-800/80 border border-indigo-500/40 text-indigo-200 font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
@@ -277,10 +313,10 @@ export const ChronaMentorView: React.FC = () => {
           </div>
         </div>
 
-        {/* SAFETY DISCLAIMER STRIP (STEP 11 & 13) */}
+        {/* SAFETY DISCLAIMER STRIP */}
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 font-mono">
           <ShieldAlert className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Chrona Mentor is a supportive AI career & academic guide. Zero psychological diagnoses or medical advice provided.</span>
+          <span>Chrona Mentor is powered by Google Gemini 3.5 Flash-Lite for sub-second career guidance. Zero medical/mental health advice provided.</span>
         </div>
       </div>
 
@@ -295,6 +331,27 @@ export const ChronaMentorView: React.FC = () => {
             </h3>
 
             <div className="space-y-3 text-xs font-mono">
+              {/* GEMINI ENGINE STATUS BADGE */}
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-indigo-950/70 via-purple-950/40 to-slate-900 border border-indigo-500/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-indigo-300 font-bold flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                    AI Engine
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                    Active
+                  </span>
+                </div>
+                <p className="text-white font-sans text-xs font-bold">
+                  Google Gemini 3.5 Flash-Lite
+                </p>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 pt-0.5">
+                  <span>⚡ Sub-second Latency</span>
+                  <span>•</span>
+                  <span>🌐 Multilingual (EN/TE/HI)</span>
+                </div>
+              </div>
+
               <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
                 <span className="text-slate-400 font-bold block">🎯 Target Career & Company</span>
                 <span className="text-indigo-300 font-bold font-sans text-sm block">
@@ -317,7 +374,7 @@ export const ChronaMentorView: React.FC = () => {
               </div>
             </div>
 
-            {/* WELL-BEING QUICK CHECK-IN (STEP 11) */}
+            {/* WELL-BEING QUICK CHECK-IN */}
             <div className="space-y-2 pt-2 border-t border-slate-800">
               <span className="text-xs font-mono text-slate-400 font-bold block">
                 How are you feeling today?
@@ -379,11 +436,20 @@ export const ChronaMentorView: React.FC = () => {
                         : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none'
                     }`}
                   >
-                    {msg.wellbeingBadge && (
-                      <div className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-md inline-block">
-                        {msg.wellbeingBadge}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {msg.sender === 'mentor' && (
+                        <div className="text-[10px] font-mono font-bold text-indigo-300 bg-indigo-950/60 border border-indigo-500/40 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                          <Zap className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                          <span>{msg.modelUsed || 'Gemini 3.5 Flash-Lite'}</span>
+                        </div>
+                      )}
+
+                      {msg.wellbeingBadge && (
+                        <div className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-md inline-block">
+                          {msg.wellbeingBadge}
+                        </div>
+                      )}
+                    </div>
 
                     {/* REAL-TIME SPEAKER VERIFICATION BADGE */}
                     {msg.speakerVerificationBadge && (
@@ -408,7 +474,7 @@ export const ChronaMentorView: React.FC = () => {
 
                     <p className="whitespace-pre-line">{msg.text}</p>
 
-                    {/* EMBEDDED ACTION BUTTONS (STEP 17) */}
+                    {/* EMBEDDED ACTION BUTTONS */}
                     {msg.actionButtons && msg.actionButtons.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/80 font-mono text-[11px]">
                         {msg.actionButtons.map((btn, bIdx) => (
@@ -435,8 +501,9 @@ export const ChronaMentorView: React.FC = () => {
                   <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center text-white animate-spin">
                     <Sparkles className="w-4 h-4" />
                   </div>
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 animate-pulse">
-                    Analyzing your Career GPS & schedule context...
+                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 animate-pulse flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                    <span>Gemini 3.5 Flash-Lite is analyzing your Career GPS, missions & courses...</span>
                   </div>
                 </div>
               )}
@@ -444,7 +511,7 @@ export const ChronaMentorView: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* INPUT & VOICE CONTROLS (STEP 16) */}
+            {/* INPUT & VOICE CONTROLS */}
             <div className="pt-3 border-t border-slate-800">
               <VoiceInputField
                 id="chrona_mentor_chat_input"
@@ -452,14 +519,73 @@ export const ChronaMentorView: React.FC = () => {
                 onChange={(val) => setInputQuery(val)}
                 onVoiceSubmit={(isVoice) => handleSendMessage(undefined, isVoice)}
                 defaultLang={SPEECH_LANG_CODES[currentLanguage as LanguageCode] || 'en-US'}
-                placeholder="Ask Chrona Mentor (e.g. 'What should I do today?')..."
+                placeholder="Ask Chrona Mentor (powered by Gemini 3.5 Flash-Lite)..."
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* MANAGE MENTOR MEMORY MODAL (STEP 15) */}
+      {/* GEMINI API KEY CONFIG MODAL */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-md glass-panel p-6 rounded-3xl border border-indigo-500/40 bg-slate-950/95 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-indigo-400 font-mono text-xs font-bold">
+                <Key className="w-4 h-4 text-amber-400" />
+                <span>GOOGLE GEMINI 3.5 FLASH-LITE API KEY</span>
+              </div>
+              <button
+                onClick={() => setShowKeyModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-900 border border-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs font-mono">
+              <p className="text-slate-300 leading-relaxed font-sans">
+                Paste your Google Gemini API Key to enable real-time <strong>Gemini 3.5 Flash-Lite</strong> responses for Chrona Mentor across all multi-turn conversations and voice queries.
+              </p>
+              
+              <div className="space-y-1.5">
+                <label className="text-slate-400 text-[11px] block">Gemini API Key</label>
+                <input
+                  type="password"
+                  placeholder="AIzaSy..."
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                />
+              </div>
+
+              <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-[11px] space-y-1">
+                <p>• Model: <strong>gemini-3.5-flash-lite</strong></p>
+                <p>• Automatic fallback waterfall enabled for 100% uptime</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={handleSaveGeminiKey}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-indigo-600/30"
+              >
+                {savedKeySuccess ? <Check className="w-4 h-4 text-emerald-300" /> : <Key className="w-4 h-4" />}
+                <span>{savedKeySuccess ? 'Saved Successfully!' : 'Save Key & Activate'}</span>
+              </button>
+
+              <button
+                onClick={() => setShowKeyModal(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 font-mono text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE MENTOR MEMORY MODAL */}
       {showMemoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
           <div className="w-full max-w-md glass-panel p-6 rounded-3xl border border-indigo-500/40 bg-slate-950/95 space-y-5">

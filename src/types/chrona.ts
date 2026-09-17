@@ -426,6 +426,7 @@ export interface MentorMessage {
   actionButtons?: MentorMessageAction[];
   wellbeingBadge?: string;
   recommendationTopic?: string;
+  modelUsed?: string;
   speakerVerificationBadge?: {
     status: 'verified' | 'unrecognized' | 'not_enrolled';
     confidenceScore: number;

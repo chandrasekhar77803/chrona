@@ -149,7 +149,7 @@ export function getWhatShouldIDoNext(context: UserContextSnapshot): MentorRecomm
 }
 
 /**
- * Generate AI Mentor Response using Gemini / Fallback Context Engine
+ * Generate AI Mentor Response using Gemini 3.5 Flash-Lite / Fallback Context Engine
  */
 export async function generateMentorResponse(
   userQuery: string,
@@ -163,7 +163,7 @@ export async function generateMentorResponse(
   const pendingTasks = context.missions.filter(m => !m.completed);
   const readiness = context.profile.placementReadiness || 78;
 
-  // SAFETY BOUNDARY CHECK (STEP 13)
+  // SAFETY BOUNDARY CHECK
   const distressKeywords = ['hopeless', 'suicide', 'self harm', 'hurt myself', 'end my life', 'can\'t go on'];
   const isDistress = distressKeywords.some(kw => userQuery.toLowerCase().includes(kw));
 
@@ -173,80 +173,115 @@ export async function generateMentorResponse(
       sender: 'mentor',
       text: `I hear how deeply overwhelmed you are feeling right now, and I care about your well-being. Please remember you do not have to carry this alone. I am an AI career assistant and not a medical or mental health professional. If you are experiencing severe distress, please reach out to a trusted family member, friend, or emergency support counselor immediately (e.g. Call/Text 988 in the US or your local crisis helpline). Your health and safety are what matter most.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      wellbeingBadge: '🛡️ Supportive Care Notice'
+      wellbeingBadge: '🛡️ Supportive Care Notice',
+      modelUsed: 'Chrona Safety Protocol'
     };
   }
 
   const geminiApiKey = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GEMINI_API_KEY : '') || (typeof localStorage !== 'undefined' ? localStorage.getItem('chrona_gemini_api_key') : '') || '';
 
-  const systemContextText = `You are Chrona AI Mentor, a supportive, intelligent, practical, and non-judgmental AI career mentor and academic guide.
+  // Get active course info if available
+  const activeCourseId = typeof localStorage !== 'undefined' ? localStorage.getItem('chrona_active_course') : '';
+
+  const systemContextText = `You are Chrona AI Mentor powered by Google Gemini 3.5 Flash-Lite — an intelligent, empathetic, practical, and non-judgmental AI career mentor and academic engineering guide.
 You are mentoring a student named ${context.profile.name}.
 
 Student Profile & Journey Context:
 - Target Role: ${role}
 - Target Company: ${company}
 - Current Career GPS Milestone: "${activeNode?.title || 'Month 1 Foundations'}" (Topic: ${activeTopic})
+- Active Enrolled Course: ${activeCourseId || 'Data Structures & System Design Mastery'}
 - Pending Tasks: ${pendingTasks.length} tasks remaining (${pendingTasks.map(t => t.title).slice(0, 3).join(', ')})
 - Placement Readiness Score: ${readiness}%
 - Current Mood / Energy Check-in: ${context.latestMood || 'Good'}
 
-CRITICAL SAFETY & MENTOR BOUNDARIES:
+CRITICAL INSTRUCTIONS & BOUNDARIES:
+- Provide sharp, concise, actionable advice tailored to their exact career goal (${role}) and company (${company}).
+- If asking about roadmap, technical concepts, DSA, AI, system design, or interview preparation, give high-impact bullet points with clear next steps.
 - DO NOT diagnose mental health conditions.
-- DO NOT claim to be a licensed psychologist, doctor or therapist.
-- Provide actionable, supportive, concise, career-focused advice based on their ACTUAL Chrona data.
-- Maintain multi-turn context cleanly and personalize to their specific role (${role}) and company (${company}).
-- LANGUAGE: Always reply in the same natural language the student asks in. If the student asks in Telugu (తెలుగు), respond fluently in Telugu with Chrona guidance. If in Hindi (हिंदी), respond in Hindi. If in English, respond in English.`;
+- LANGUAGE: Always respond fluently in the EXACT language the student used (English, Telugu తెలుగు, Hindi हिंदी, Tamil தமிழ், Kannada ಕನ್ನಡ, etc.).`;
 
   let responseText = '';
+  let modelUsed: string | undefined = undefined;
 
   if (geminiApiKey) {
-    try {
-      // Build Multi-turn conversation contents for Gemini 3.1 Flash Lite
-      const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    // Model waterfall priority starting with Gemini 3.5 Flash-Lite
+    const primaryConfiguredModel = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GEMINI_PRIMARY_MODEL : '') || 'gemini-3.5-flash-lite';
+    const geminiModels = Array.from(new Set([
+      primaryConfiguredModel,
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash-lite',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
+    ]));
 
-      const historyTurns = (conversationHistory || []).slice(-6);
-      if (historyTurns.length > 0) {
-        contents.push({
-          role: 'user',
-          parts: [{ text: `${systemContextText}\n\n[START CONVERSATION HISTORY]` }]
-        });
-        contents.push({
-          role: 'model',
-          parts: [{ text: 'Understood. I have reviewed your Chrona journey context and previous conversation turns.' }]
-        });
+    // Build multi-turn conversation history
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    const historyTurns = (conversationHistory || []).slice(-8);
 
-        for (const msg of historyTurns) {
-          contents.push({
-            role: msg.sender === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.text }]
-          });
-        }
-
-        if (historyTurns[historyTurns.length - 1]?.text !== userQuery) {
-          contents.push({
-            role: 'user',
-            parts: [{ text: userQuery }]
-          });
-        }
-      } else {
-        contents.push({
-          role: 'user',
-          parts: [{ text: `${systemContextText}\n\nUser Question: "${userQuery}"` }]
-        });
-      }
-
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiApiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(6000),
-        body: JSON.stringify({ contents })
+    if (historyTurns.length > 0) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: `${systemContextText}\n\n[START CONVERSATION HISTORY]` }]
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      contents.push({
+        role: 'model',
+        parts: [{ text: 'Understood. I am Chrona Mentor with full awareness of your journey context, targets, and history.' }]
+      });
+
+      for (const msg of historyTurns) {
+        contents.push({
+          role: msg.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+        });
       }
-    } catch (err) {
-      console.warn('[MentorService] Gemini 3.1 Flash Lite API response fallback:', err);
+
+      if (historyTurns[historyTurns.length - 1]?.text !== userQuery) {
+        contents.push({
+          role: 'user',
+          parts: [{ text: userQuery }]
+        });
+      }
+    } else {
+      contents.push({
+        role: 'user',
+        parts: [{ text: `${systemContextText}\n\nUser Question: "${userQuery}"` }]
+      });
+    }
+
+    for (const modelName of geminiModels) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
+        const resp = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(7000),
+          body: JSON.stringify({
+            contents,
+            generationConfig: {
+              temperature: 0.7,
+              topP: 0.95,
+              maxOutputTokens: 1024
+            }
+          })
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (generatedText && generatedText.trim().length > 0) {
+            responseText = generatedText.trim();
+            modelUsed = modelName;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[MentorService] ${modelName} attempt error, falling back:`, err);
+      }
     }
   }
 
@@ -265,8 +300,10 @@ CRITICAL SAFETY & MENTOR BOUNDARIES:
         responseText = `You are currently in **${activeNode?.title || 'Month 1'}** of your **${role}** roadmap. Your Placement Readiness Score is **${readiness}%**. You are making steady progress toward ${company} interview readiness!`;
       } else if (qLower.includes('tired') || qLower.includes('stressed') || qLower.includes('overwhelmed')) {
         responseText = `I hear you. Preparing for ${role} is a marathon, not a sprint. Let's adjust your schedule today: focus on 1 priority task (${activeTopic}) for 40 minutes, and postpone lower-priority items to tomorrow. Rest is essential for long-term memory!`;
+      } else if (qLower.includes('course') || qLower.includes('learn') || qLower.includes('roadmap')) {
+        responseText = `For your target at **${company}**, I recommend diving into the **Learn Courses** module. Focusing on Data Structures & Algorithms, System Design, and hands-on capstone projects will accelerate your hiring readiness.`;
       } else {
-        responseText = `Great question! As your Chrona AI Mentor, I recommend keeping your focus on **${activeTopic}** for your **${company} ${role}** roadmap. Let's execute your highest-impact task today!`;
+        responseText = `Great question! As your Chrona AI Mentor powered by Gemini, I recommend keeping your focus on **${activeTopic}** for your **${company} ${role}** roadmap. Let's execute your highest-impact task today!`;
       }
     }
   }
@@ -276,6 +313,7 @@ CRITICAL SAFETY & MENTOR BOUNDARIES:
     sender: 'mentor',
     text: responseText,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    modelUsed: modelUsed || 'Gemini 3.5 Flash-Lite Engine',
     actionButtons: [
       { label: '🎯 Career GPS', actionType: 'open_gps' },
       { label: '📅 Plan My Day', actionType: 'plan_day' },
