@@ -32,10 +32,15 @@ import type {
   ChronaNotification,
   LinkedInIntegrationConfig,
   WhatsAppIntegrationConfig,
+  GitHubIntegrationConfig,
   IntegrationStatus,
   NotificationPriority,
   NavSection
 } from '../types/chrona';
+import {
+  verifyGitHubToken,
+  fetchGitHubLiveNotifications
+} from './githubService';
 
 // Default empty configurations
 export const DEFAULT_LINKEDIN_CONFIG: LinkedInIntegrationConfig = {
@@ -56,6 +61,13 @@ export const DEFAULT_WHATSAPP_CONFIG: WhatsAppIntegrationConfig = {
   accessToken: '',
   webhookVerifyToken: '',
   webhookUrl: typeof window !== 'undefined' ? `${window.location.origin}/api/webhooks/whatsapp` : 'https://chrona.app/api/webhooks/whatsapp',
+  status: 'NOT_CONFIGURED'
+};
+
+export const DEFAULT_GITHUB_CONFIG: GitHubIntegrationConfig = {
+  username: '',
+  personalAccessToken: '',
+  scopes: ['repo', 'read:user', 'user:email'],
   status: 'NOT_CONFIGURED'
 };
 
@@ -162,6 +174,62 @@ export async function saveWhatsAppConfig(
     accountIdentifier: config.phoneNumberId ? `phone_${config.phoneNumberId}` : '',
     scopes: ['messages', 'whatsapp_business_messaging'],
     hasCredentials: isFilled,
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+
+  return updated;
+}
+
+export async function getGitHubConfig(userId: string): Promise<GitHubIntegrationConfig> {
+  if (!userId) return { ...DEFAULT_GITHUB_CONFIG };
+  try {
+    const ref = doc(db, 'users', userId, 'integrationConfigs', 'github');
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      return { ...DEFAULT_GITHUB_CONFIG, ...snap.data() } as GitHubIntegrationConfig;
+    }
+  } catch (err) {
+    console.warn('[API Integration] Error loading GitHub config:', err);
+  }
+  return { ...DEFAULT_GITHUB_CONFIG };
+}
+
+export async function saveGitHubConfig(
+  userId: string,
+  config: Partial<GitHubIntegrationConfig>
+): Promise<GitHubIntegrationConfig> {
+  if (!userId) throw new Error('User ID required');
+  
+  const current = await getGitHubConfig(userId);
+  const isFilled = Boolean(config.personalAccessToken?.trim() || config.username?.trim());
+  const newStatus: IntegrationStatus = config.status || (isFilled ? 'CONFIGURED' : 'NOT_CONFIGURED');
+
+  const updated: GitHubIntegrationConfig = {
+    ...current,
+    ...config,
+    status: newStatus,
+    errorMessage: config.errorMessage || undefined
+  };
+
+  const ref = doc(db, 'users', userId, 'integrationConfigs', 'github');
+  await setDoc(ref, updated, { merge: true });
+
+  // Update public integration metadata in Firestore
+  const integrationRef = doc(db, 'users', userId, 'integrations', 'github');
+  await setDoc(integrationRef, {
+    provider: 'github',
+    status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
+    accountIdentifier: updated.username || (updated.personalAccessToken ? 'github_user' : ''),
+    scopes: updated.scopes || ['repo', 'read:user', 'user:email'],
+    hasCredentials: isFilled,
+    statsData: {
+      publicRepos: updated.publicReposCount,
+      stars: updated.totalStars,
+      followers: updated.followersCount,
+      languages: updated.topLanguages,
+      avatarUrl: updated.avatarUrl,
+      profileName: updated.profileName
+    },
     updatedAt: new Date().toISOString()
   }, { merge: true });
 
@@ -431,6 +499,78 @@ export async function testWhatsAppConnection(
       success: false,
       status: 'SYNC_ERROR',
       message: msg
+    };
+  }
+}
+
+/**
+ * Test GitHub connection and synchronize repositories and event notifications
+ */
+export async function testGitHubConnection(
+  userId: string,
+  config?: GitHubIntegrationConfig
+): Promise<ConnectionTestResult> {
+  const activeConfig = config || (await getGitHubConfig(userId));
+
+  if (!activeConfig.personalAccessToken?.trim() && !activeConfig.username?.trim()) {
+    return {
+      success: false,
+      status: 'NOT_CONFIGURED',
+      message: 'GitHub not configured yet. Please enter a Personal Access Token or GitHub Username.'
+    };
+  }
+
+  const tokenOrUser = activeConfig.personalAccessToken?.trim() || activeConfig.username?.trim() || '';
+
+  try {
+    const res = await verifyGitHubToken(tokenOrUser);
+
+    if (res.success && res.profile) {
+      const successConfig: Partial<GitHubIntegrationConfig> = {
+        username: res.profile.login,
+        profileName: res.profile.name || res.profile.login,
+        avatarUrl: res.profile.avatarUrl,
+        publicReposCount: res.profile.publicRepos,
+        totalStars: res.stats?.totalStars || 0,
+        followersCount: res.profile.followers,
+        topLanguages: res.stats?.topLanguages || [],
+        status: 'CONNECTED',
+        lastTestedAt: new Date().toISOString(),
+        errorMessage: undefined
+      };
+
+      await saveGitHubConfig(userId, successConfig);
+      await syncProviderNotifications(userId, 'github', res.profile.login);
+
+      return {
+        success: true,
+        status: 'CONNECTED',
+        message: `Connected successfully to GitHub user @${res.profile.login} (${res.profile.publicRepos} repos, ${res.stats?.totalStars || 0} stars). Real-time notifications synced.`,
+        details: res.profile as any
+      };
+    } else {
+      await saveGitHubConfig(userId, {
+        status: 'SYNC_ERROR',
+        lastTestedAt: new Date().toISOString(),
+        errorMessage: res.message
+      });
+      return {
+        success: false,
+        status: 'SYNC_ERROR',
+        message: res.message
+      };
+    }
+  } catch (err: any) {
+    const errorMsg = err?.message || 'Connection failed — unable to reach GitHub API.';
+    await saveGitHubConfig(userId, {
+      status: 'SYNC_ERROR',
+      lastTestedAt: new Date().toISOString(),
+      errorMessage: errorMsg
+    });
+    return {
+      success: false,
+      status: 'SYNC_ERROR',
+      message: errorMsg
     };
   }
 }
@@ -1013,17 +1153,26 @@ export async function syncProviderNotifications(
   }
 
   const pKey = provider.toLowerCase();
-  const rawEvents = PLATFORM_EVENT_CATALOG[pKey] || [];
+  let addedCount = 0;
 
-  if (rawEvents.length === 0) {
-    return {
-      success: true,
-      count: 0,
-      message: `${normalizedProviderName(provider)} is connected. Live event listener active.`
-    };
+  // Real-time live GitHub event streaming
+  if (pKey === 'github') {
+    try {
+      const ghConfig = await getGitHubConfig(userId);
+      const tokenOrUser = ghConfig.personalAccessToken?.trim() || accountIdentifier || ghConfig.username || '';
+      if (tokenOrUser) {
+        const liveEvents = await fetchGitHubLiveNotifications(userId, tokenOrUser, Boolean(ghConfig.personalAccessToken?.trim()));
+        for (const notif of liveEvents) {
+          const { added } = await storeNotificationWithDeduplication(userId, notif);
+          if (added) addedCount++;
+        }
+      }
+    } catch (err) {
+      console.warn('[API Integration] Live GitHub events sync error:', err);
+    }
   }
 
-  let addedCount = 0;
+  const rawEvents = PLATFORM_EVENT_CATALOG[pKey] || [];
 
   for (const raw of rawEvents) {
     const customized: RawEventPayload = {

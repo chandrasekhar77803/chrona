@@ -647,8 +647,23 @@ export interface WhatsAppIntegrationConfig {
   errorMessage?: string;
 }
 
+export interface GitHubIntegrationConfig {
+  username?: string;
+  personalAccessToken: string;
+  scopes?: string[];
+  lastTestedAt?: string;
+  status: IntegrationStatus;
+  errorMessage?: string;
+  avatarUrl?: string;
+  profileName?: string;
+  publicReposCount?: number;
+  totalStars?: number;
+  followersCount?: number;
+  topLanguages?: Array<{ language: string; count: number; percentage: number }>;
+}
+
 export interface ChronaIntegrationRecord {
-  provider: string; // 'linkedin' | 'whatsapp' | 'leetcode' etc.
+  provider: string; // 'linkedin' | 'whatsapp' | 'leetcode' | 'github' etc.
   status: IntegrationStatus;
   accountIdentifier?: string;
   scopes: string[];
@@ -659,4 +674,5 @@ export interface ChronaIntegrationRecord {
   metadata?: Record<string, any>;
   errorMessage?: string;
 }
+
 

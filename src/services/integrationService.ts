@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { fetchLeetCodeStats } from './leetcodeService';
+import { fetchGitHubStats } from './githubService';
 
 export interface UserIntegrationRecord {
   provider: string; // e.g. 'leetcode', 'linkedin', 'github', etc.
@@ -96,6 +97,12 @@ export async function connectProvider(
       statsData = await fetchLeetCodeStats(accountIdentifier);
     } catch (err) {
       console.warn(`[CONNECT DEBUG] LeetCode stats fetch warning:`, err);
+    }
+  } else if (!statsData && provider === 'github' && accountIdentifier) {
+    try {
+      statsData = await fetchGitHubStats(accountIdentifier, accountIdentifier.startsWith('ghp_') || accountIdentifier.startsWith('github_pat_'));
+    } catch (err) {
+      console.warn(`[CONNECT DEBUG] GitHub stats fetch warning:`, err);
     }
   }
 

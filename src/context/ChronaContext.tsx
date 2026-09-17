@@ -22,15 +22,19 @@ import type {
   SmartestAction,
   ChronaNotification,
   LinkedInIntegrationConfig,
-  WhatsAppIntegrationConfig
+  WhatsAppIntegrationConfig,
+  GitHubIntegrationConfig
 } from '../types/chrona';
 import {
   getLinkedInConfig,
   saveLinkedInConfig,
   getWhatsAppConfig,
   saveWhatsAppConfig,
+  getGitHubConfig,
+  saveGitHubConfig,
   testLinkedInConnection,
   testWhatsAppConnection,
+  testGitHubConnection,
   subscribeUserNotifications,
   markNotificationAsReadInFirestore,
   markAllNotificationsAsReadInFirestore,
@@ -44,6 +48,7 @@ import {
   removeDemoNotifications,
   DEFAULT_LINKEDIN_CONFIG,
   DEFAULT_WHATSAPP_CONFIG,
+  DEFAULT_GITHUB_CONFIG,
   type ConnectionTestResult
 } from '../services/apiIntegrationService';
 import {
@@ -146,13 +151,16 @@ interface ChronaContextType {
   // API CONFIGURATION SUITE
   linkedInConfig: LinkedInIntegrationConfig;
   whatsAppConfig: WhatsAppIntegrationConfig;
+  gitHubConfig: GitHubIntegrationConfig;
   saveLinkedInSettings: (cfg: Partial<LinkedInIntegrationConfig>) => Promise<LinkedInIntegrationConfig>;
   saveWhatsAppSettings: (cfg: Partial<WhatsAppIntegrationConfig>) => Promise<WhatsAppIntegrationConfig>;
+  saveGitHubSettings: (cfg: Partial<GitHubIntegrationConfig>) => Promise<GitHubIntegrationConfig>;
   testLinkedIn: (config?: LinkedInIntegrationConfig) => Promise<ConnectionTestResult>;
   testWhatsApp: (config?: WhatsAppIntegrationConfig) => Promise<ConnectionTestResult>;
-  syncProvider: (provider: 'linkedin' | 'whatsapp') => Promise<{ success: boolean; count: number; message: string }>;
+  testGitHub: (config?: GitHubIntegrationConfig) => Promise<ConnectionTestResult>;
+  syncProvider: (provider: 'linkedin' | 'whatsapp' | 'github') => Promise<{ success: boolean; count: number; message: string }>;
   syncIntegrationNotifications: (provider: string) => Promise<{ success: boolean; count: number; message: string }>;
-  disconnectProvider: (provider: 'linkedin' | 'whatsapp') => Promise<void>;
+  disconnectProvider: (provider: 'linkedin' | 'whatsapp' | 'github') => Promise<void>;
 
   saveWellbeingCheckin: (checkin: WellbeingCheckin) => void;
 
@@ -385,6 +393,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Specific API Integration Configurations
   const [linkedInConfig, setLinkedInConfig] = useState<LinkedInIntegrationConfig>(DEFAULT_LINKEDIN_CONFIG);
   const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppIntegrationConfig>(DEFAULT_WHATSAPP_CONFIG);
+  const [gitHubConfig, setGitHubConfig] = useState<GitHubIntegrationConfig>(DEFAULT_GITHUB_CONFIG);
 
   const unreadNotificationsCount = useMemo(() => {
     return notifications.filter(n => !n.read).length;
@@ -396,6 +405,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setNotifications([]);
       setLinkedInConfig(DEFAULT_LINKEDIN_CONFIG);
       setWhatsAppConfig(DEFAULT_WHATSAPP_CONFIG);
+      setGitHubConfig(DEFAULT_GITHUB_CONFIG);
       setMissions([]);
       setRoadmapNodes([]);
       setSkillGaps([]);
@@ -450,7 +460,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActiveSmartestIndex(store.activeSmartestActionIndex || 0);
 
         // Fetch user-isolated records from Cloud Firestore (where userId == auth.currentUser.uid)
-        const [fsGoals, fsMissions, fsDocs, fsNotes, fsGps, fsProfile, lnkCfg, waCfg] = await Promise.all([
+        const [fsGoals, fsMissions, fsDocs, fsNotes, fsGps, fsProfile, lnkCfg, waCfg, ghCfg] = await Promise.all([
           getUserGoalsFromFirestore(currentUser.id),
           getUserMissionsFromFirestore(currentUser.id),
           getUserStudyDocumentsFromFirestore(currentUser.id),
@@ -458,7 +468,8 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           getCareerGpsFromFirestore(currentUser.id),
           getUserProfile(currentUser.id),
           getLinkedInConfig(currentUser.id),
-          getWhatsAppConfig(currentUser.id)
+          getWhatsAppConfig(currentUser.id),
+          getGitHubConfig(currentUser.id)
         ]);
 
         setGoals(fsGoals);
@@ -466,6 +477,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setStudyDocuments(fsDocs);
         setLinkedInConfig(lnkCfg);
         setWhatsAppConfig(waCfg);
+        setGitHubConfig(ghCfg);
         if (fsNotes.length > 0) {
           setSmartNoteLectures(fsNotes as any);
         }
@@ -1014,6 +1026,13 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return updated;
   };
 
+  const saveGitHubSettings = async (cfg: Partial<GitHubIntegrationConfig>): Promise<GitHubIntegrationConfig> => {
+    if (!currentUser) return DEFAULT_GITHUB_CONFIG;
+    const updated = await saveGitHubConfig(currentUser.id, cfg);
+    setGitHubConfig(updated);
+    return updated;
+  };
+
   const testLinkedIn = async (config?: LinkedInIntegrationConfig): Promise<ConnectionTestResult> => {
     if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
     const res = await testLinkedInConnection(currentUser.id, config || linkedInConfig);
@@ -1030,15 +1049,26 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return res;
   };
 
-  const syncProvider = async (provider: 'linkedin' | 'whatsapp'): Promise<{ success: boolean; count: number; message: string }> => {
+  const testGitHub = async (config?: GitHubIntegrationConfig): Promise<ConnectionTestResult> => {
+    if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
+    const res = await testGitHubConnection(currentUser.id, config || gitHubConfig);
+    const updated = await getGitHubConfig(currentUser.id);
+    setGitHubConfig(updated);
+    return res;
+  };
+
+  const syncProvider = async (provider: 'linkedin' | 'whatsapp' | 'github'): Promise<{ success: boolean; count: number; message: string }> => {
     if (!currentUser) return { success: false, count: 0, message: 'User not logged in' };
     const res = await syncProviderIntegration(currentUser.id, provider);
     if (provider === 'linkedin') {
       const updated = await getLinkedInConfig(currentUser.id);
       setLinkedInConfig(updated);
-    } else {
+    } else if (provider === 'whatsapp') {
       const updated = await getWhatsAppConfig(currentUser.id);
       setWhatsAppConfig(updated);
+    } else if (provider === 'github') {
+      const updated = await getGitHubConfig(currentUser.id);
+      setGitHubConfig(updated);
     }
     return res;
   };
@@ -1049,15 +1079,18 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return await syncProviderNotifications(currentUser.id, provider, activeIdentifier);
   };
 
-  const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp'): Promise<void> => {
+  const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp' | 'github'): Promise<void> => {
     if (!currentUser) return;
     await disconnectProviderIntegration(currentUser.id, provider);
     if (provider === 'linkedin') {
       const updated = await getLinkedInConfig(currentUser.id);
       setLinkedInConfig(updated);
-    } else {
+    } else if (provider === 'whatsapp') {
       const updated = await getWhatsAppConfig(currentUser.id);
       setWhatsAppConfig(updated);
+    } else if (provider === 'github') {
+      const updated = await getGitHubConfig(currentUser.id);
+      setGitHubConfig(updated);
     }
   };
 
@@ -1335,10 +1368,13 @@ BEHAVIOR INSTRUCTIONS:
         clearAllNotifications,
         linkedInConfig,
         whatsAppConfig,
+        gitHubConfig,
         saveLinkedInSettings,
         saveWhatsAppSettings,
+        saveGitHubSettings,
         testLinkedIn,
         testWhatsApp,
+        testGitHub,
         syncProvider,
         syncIntegrationNotifications,
         disconnectProvider: disconnectProviderAction,

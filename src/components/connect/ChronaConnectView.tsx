@@ -49,10 +49,13 @@ export const ChronaConnectView: React.FC = () => {
     toggleDemoNotificationMode,
     linkedInConfig,
     whatsAppConfig,
+    gitHubConfig,
     saveLinkedInSettings,
     saveWhatsAppSettings,
+    saveGitHubSettings,
     testLinkedIn,
     testWhatsApp,
+    testGitHub,
     markNotificationAsRead,
     syncIntegrationNotifications
   } = useChrona();
@@ -139,6 +142,14 @@ export const ChronaConnectView: React.FC = () => {
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState<boolean>(false);
   const [waFeedback, setWaFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
+  // ── GITHUB CONFIGURATION FORM STATE ──
+  const [ghToken, setGhToken] = useState<string>('');
+  const [ghUsername, setGhUsername] = useState<string>('');
+  const [showGhToken, setShowGhToken] = useState<boolean>(false);
+  const [isTestingGitHub, setIsTestingGitHub] = useState<boolean>(false);
+  const [isSavingGitHub, setIsSavingGitHub] = useState<boolean>(false);
+  const [ghFeedback, setGhFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
   // Sync state from context configs
   useEffect(() => {
     if (linkedInConfig) {
@@ -161,6 +172,13 @@ export const ChronaConnectView: React.FC = () => {
       setWaWebhookUrl(whatsAppConfig.webhookUrl || `${window.location.origin}/api/webhooks/whatsapp`);
     }
   }, [whatsAppConfig]);
+
+  useEffect(() => {
+    if (gitHubConfig) {
+      setGhToken(gitHubConfig.personalAccessToken || '');
+      setGhUsername(gitHubConfig.username || '');
+    }
+  }, [gitHubConfig]);
 
   // Supported Platforms Registry
   const platformsList: PlatformConfig[] = [
@@ -431,6 +449,62 @@ export const ChronaConnectView: React.FC = () => {
     setWaFeedback({ type: 'info', text: 'WhatsApp integration disconnected.' });
   };
 
+  // ── SAVE & TEST ACTIONS FOR GITHUB ──
+  const handleSaveGitHub = async () => {
+    setIsSavingGitHub(true);
+    setGhFeedback(null);
+    try {
+      const updated = await saveGitHubSettings({
+        personalAccessToken: ghToken.trim(),
+        username: ghUsername.trim()
+      });
+      setGhFeedback({
+        type: 'success',
+        text: `GitHub configuration saved (${updated.status === 'CONFIGURED' ? 'Configured' : 'Saved'}).`
+      });
+    } catch (err: any) {
+      setGhFeedback({
+        type: 'error',
+        text: err?.message || 'Failed to save GitHub configuration.'
+      });
+    } finally {
+      setIsSavingGitHub(false);
+    }
+  };
+
+  const handleTestGitHub = async () => {
+    setIsTestingGitHub(true);
+    setGhFeedback(null);
+    try {
+      const result = await testGitHub({
+        personalAccessToken: ghToken.trim(),
+        username: ghUsername.trim(),
+        status: gitHubConfig.status
+      });
+      if (result.success) {
+        setGhFeedback({ type: 'success', text: `✅ ${result.message}` });
+      } else {
+        setGhFeedback({ type: 'error', text: `❌ ${result.message}` });
+      }
+    } catch (err: any) {
+      setGhFeedback({
+        type: 'error',
+        text: 'Connection failed — please check your GitHub token or username.'
+      });
+    } finally {
+      setIsTestingGitHub(false);
+    }
+  };
+
+  const handleDisconnectGitHub = async () => {
+    await saveGitHubSettings({
+      status: 'DISCONNECTED',
+      personalAccessToken: '',
+      errorMessage: undefined
+    });
+    setGhFeedback({ type: 'info', text: 'GitHub integration disconnected.' });
+  };
+
   // Status Badge Renderer
   const renderStatusBadge = (status?: IntegrationStatus | 'connected' | 'disconnected' | string) => {
     switch (status) {
@@ -482,7 +556,7 @@ export const ChronaConnectView: React.FC = () => {
 
   // Open Permission Modal
   const openPermissionModal = (platform: PlatformConfig) => {
-    if (platform.id === 'linkedin' || platform.id === 'whatsapp') {
+    if (platform.id === 'linkedin' || platform.id === 'whatsapp' || platform.id === 'github') {
       setActiveTab('config');
       return;
     }
@@ -537,10 +611,12 @@ export const ChronaConnectView: React.FC = () => {
 
   const connectedCount = Object.values(userIntegrations).filter(rec => rec.status === 'connected').length +
     (linkedInConfig.status === 'CONNECTED' ? 1 : 0) +
-    (whatsAppConfig.status === 'CONNECTED' ? 1 : 0);
+    (whatsAppConfig.status === 'CONNECTED' ? 1 : 0) +
+    (gitHubConfig.status === 'CONNECTED' ? 1 : 0);
 
   const filteredNotifications = notifications.filter(n => {
     if (selectedHubCategory === 'All') return true;
+    if (selectedHubCategory === 'GitHub') return n.source.toLowerCase().includes('github');
     if (selectedHubCategory === 'LinkedIn') return n.source.toLowerCase().includes('linkedin');
     if (selectedHubCategory === 'WhatsApp') return n.source.toLowerCase().includes('whatsapp');
     if (selectedHubCategory === 'High Priority') return n.priority === 'HIGH';
@@ -639,9 +715,10 @@ export const ChronaConnectView: React.FC = () => {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {platformsList.map(platform => {
-              const isConfiguredProvider = platform.id === 'linkedin' || platform.id === 'whatsapp';
+              const isConfiguredProvider = platform.id === 'linkedin' || platform.id === 'whatsapp' || platform.id === 'github';
               const configStatus = platform.id === 'linkedin' ? linkedInConfig.status
                 : platform.id === 'whatsapp' ? whatsAppConfig.status
+                : platform.id === 'github' ? gitHubConfig.status
                 : userIntegrations[platform.id]?.status;
 
               const isConnected = configStatus === 'CONNECTED' || configStatus === 'connected';
@@ -759,7 +836,7 @@ export const ChronaConnectView: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {/* ──────────────────────────────────────────────────────────── */}
             {/* CARD A: LINKEDIN CONFIGURATION                               */}
             {/* ──────────────────────────────────────────────────────────── */}
@@ -1170,6 +1247,189 @@ export const ChronaConnectView: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* ──────────────────────────────────────────────────────────── */}
+            {/* CARD C: GITHUB DEVELOPER & PAT CONFIGURATION                 */}
+            {/* ──────────────────────────────────────────────────────────── */}
+            <div className="glass-panel p-6 rounded-3xl border border-purple-500/30 bg-slate-950/90 space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-purple-950/70 border border-purple-500/40 flex items-center justify-center text-purple-300 font-bold">
+                      <Link2 className="w-5 h-5 text-purple-300" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-white">GitHub API & PAT</h3>
+                      <span className="text-[11px] font-mono text-slate-400">Personal Access Token & Repo Sync</span>
+                    </div>
+                  </div>
+
+                  {renderStatusBadge(gitHubConfig.status)}
+                </div>
+
+                {/* Feedback Message */}
+                {ghFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl text-xs font-mono flex items-center gap-2 ${
+                      ghFeedback.type === 'success'
+                        ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                        : ghFeedback.type === 'error'
+                        ? 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                        : 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-300'
+                    }`}
+                  >
+                    <span>{ghFeedback.text}</span>
+                  </div>
+                )}
+
+                {/* Field 1: GitHub Personal Access Token */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">Personal Access Token (PAT)</label>
+                    <a
+                      href="https://github.com/settings/tokens"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 underline flex items-center gap-1"
+                    >
+                      <span>Generate Token</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showGhToken ? 'text' : 'password'}
+                      value={ghToken}
+                      onChange={e => setGhToken(e.target.value)}
+                      placeholder={gitHubConfig.personalAccessToken ? maskSecret(gitHubConfig.personalAccessToken) : 'github_pat_... or ghp_...'}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGhToken(!showGhToken)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {showGhToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] font-mono text-slate-400">
+                    Required Scopes: <code className="text-purple-300">read:user</code>, <code className="text-purple-300">repo</code> (or public repo access).
+                  </p>
+                </div>
+
+                {/* Field 2: GitHub Username */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">GitHub Username (Optional / Auto-detected)</label>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      Auto-detected
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={ghUsername}
+                    onChange={e => setGhUsername(e.target.value)}
+                    placeholder="e.g. chandrasekharveerla71-cell"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-purple-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Synced Stats Preview Card if Connected */}
+                {gitHubConfig.status === 'CONNECTED' && gitHubConfig.username && (
+                  <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-purple-500/30 space-y-2.5">
+                    <div className="flex items-center gap-3">
+                      {gitHubConfig.avatarUrl ? (
+                        <img
+                          src={gitHubConfig.avatarUrl}
+                          alt={gitHubConfig.username}
+                          className="w-9 h-9 rounded-full border border-purple-400"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-purple-600/30 flex items-center justify-center font-bold text-white text-xs">
+                          GH
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-xs font-bold text-white block">{gitHubConfig.profileName || gitHubConfig.username}</span>
+                        <a
+                          href={`https://github.com/${gitHubConfig.username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-mono text-purple-400 hover:underline flex items-center gap-1"
+                        >
+                          <span>@{gitHubConfig.username}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-mono pt-1">
+                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-slate-400 block text-[10px]">Repos</span>
+                        <span className="font-bold text-white">{gitHubConfig.publicReposCount || 0}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-slate-400 block text-[10px]">Stars</span>
+                        <span className="font-bold text-amber-400">★ {gitHubConfig.totalStars || 0}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-slate-400 block text-[10px]">Followers</span>
+                        <span className="font-bold text-emerald-400">{gitHubConfig.followersCount || 0}</span>
+                      </div>
+                    </div>
+
+                    {gitHubConfig.topLanguages && gitHubConfig.topLanguages.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {gitHubConfig.topLanguages.slice(0, 4).map((l, lIdx) => (
+                          <span
+                            key={lIdx}
+                            className="px-2 py-0.5 rounded-full bg-purple-950/80 border border-purple-500/30 text-[10px] font-mono text-purple-300 font-bold"
+                          >
+                            {l.language} ({l.percentage}%)
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveGitHub}
+                    disabled={isSavingGitHub}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {isSavingGitHub ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Token</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestGitHub}
+                    disabled={isTestingGitHub || (!ghToken.trim() && !ghUsername.trim())}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-mono text-xs font-bold cursor-pointer transition-all shadow-md shadow-purple-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isTestingGitHub ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
+                    <span>Test & Sync Repos</span>
+                  </button>
+                </div>
+
+                {gitHubConfig.status === 'CONNECTED' && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectGitHub}
+                    className="w-full py-2 rounded-xl bg-rose-950/30 hover:bg-rose-950/60 border border-rose-800/60 text-rose-400 text-xs font-mono font-bold cursor-pointer transition-colors"
+                  >
+                    Disconnect GitHub
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1182,7 +1442,7 @@ export const ChronaConnectView: React.FC = () => {
           {/* TOP CONTROLS & DEMO SWITCH */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl bg-slate-950/80 border border-purple-500/30">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 font-mono text-xs">
-              {['All', 'High Priority', 'Unread', 'LinkedIn', 'WhatsApp'].map(cat => (
+              {['All', 'High Priority', 'Unread', 'GitHub', 'LinkedIn', 'WhatsApp'].map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedHubCategory(cat)}
