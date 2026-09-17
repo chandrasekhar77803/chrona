@@ -38,6 +38,7 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
   const {
     isListening,
     isStarting,
+    isProcessing,
     interimText,
     errorMessage,
     speechLang,
@@ -145,7 +146,7 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
             </select>
           </div>
 
-          {/* MICROPHONE BUTTON (🎤 / ⏹) */}
+          {/* MICROPHONE BUTTON (🎤 / ⏹ / ⏳) */}
           {isListening ? (
             <button
               type="button"
@@ -156,14 +157,15 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
               <Square className="w-3.5 h-3.5 fill-current" />
               <span className="hidden sm:inline">Stop</span>
             </button>
-          ) : isStarting ? (
+          ) : (isStarting || isProcessing) ? (
             <button
               type="button"
               disabled
               className="p-2 rounded-xl bg-indigo-900/60 text-indigo-300 border border-indigo-500/40 cursor-wait flex items-center gap-1 text-[11px] font-mono"
-              title="Starting microphone..."
+              title={isProcessing ? "Transcribing with AI..." : "Starting microphone..."}
             >
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {isProcessing && <span className="text-[10px] hidden sm:inline">AI Transcribing</span>}
             </button>
           ) : (
             <button
@@ -191,6 +193,14 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
           )}
         </div>
       </div>
+
+      {/* LIVE PROCESSING BANNER */}
+      {isProcessing && (
+        <div className="p-3 rounded-2xl bg-purple-950/60 border border-purple-500/40 text-xs font-mono text-purple-300 flex items-center gap-2.5 animate-fadeIn">
+          <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" />
+          <span>Transcribing voice accurately using Chrona AI Audio Engine...</span>
+        </div>
+      )}
 
       {/* LIVE PREVIEW & STATUS INDICATOR */}
       {isListening && (

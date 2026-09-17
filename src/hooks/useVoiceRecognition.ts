@@ -117,6 +117,7 @@ export function useVoiceRecognition({
   return {
     isListening: status === 'listening' || status === 'starting',
     isStarting: status === 'starting',
+    isProcessing: status === 'processing',
     isPaused: status === 'paused',
     status,
     interimText,
