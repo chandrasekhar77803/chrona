@@ -362,6 +362,7 @@ export async function saveHackerRankConfig(
     ...current,
     ...config,
     username,
+    profileUrl: config.profileUrl || current.profileUrl || (username ? `https://www.hackerrank.com/profile/${username}` : undefined),
     status: newStatus,
     errorMessage: config.errorMessage || undefined
   };
@@ -380,15 +381,22 @@ export async function saveHackerRankConfig(
       provider: 'hackerrank',
       status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
       accountIdentifier: updated.username || '',
-      scopes: ['badges', 'certificates', 'leaderboard'],
+      scopes: ['badges', 'certificates', 'courses', 'leaderboard'],
       hasCredentials: isFilled,
       statsData: {
         totalSolved: updated.totalSolved,
+        solvedCount: updated.solvedCount || updated.totalSolved,
         leaderboardRank: updated.leaderboardRank,
-        badgesCount: updated.badges?.length || 0,
+        countryRank: updated.countryRank,
+        score: updated.score,
+        badgesCount: updated.badges?.length || updated.domainBadges?.length || 0,
         certificatesCount: updated.certificates?.length || 0,
+        coursesCount: updated.courses?.length || 0,
         avatarUrl: updated.avatarUrl,
-        name: updated.name
+        profileUrl: updated.profileUrl || (updated.username ? `https://www.hackerrank.com/profile/${updated.username}` : undefined),
+        name: updated.name,
+        school: updated.school,
+        country: updated.country
       },
       updatedAt: new Date().toISOString()
     }, { merge: true });
@@ -800,10 +808,19 @@ export async function testHackerRankConnection(
         username: res.stats.username,
         name: res.stats.name || res.stats.username,
         avatarUrl: res.stats.avatarUrl,
+        profileUrl: res.stats.profileUrl || `https://www.hackerrank.com/profile/${res.stats.username}`,
+        school: res.stats.school,
+        country: res.stats.country,
         totalSolved: res.stats.totalSolved,
+        solvedCount: res.stats.totalSolved,
         leaderboardRank: res.stats.leaderboardRank,
+        countryRank: res.stats.countryRank,
+        score: res.stats.score,
         badges: res.stats.badges,
+        domainBadges: res.stats.badges,
         certificates: res.stats.certificates,
+        courses: res.stats.courses,
+        recentActivities: res.stats.recentActivities,
         status: 'CONNECTED',
         lastTestedAt: new Date().toISOString(),
         errorMessage: undefined
@@ -820,7 +837,7 @@ export async function testHackerRankConnection(
       return {
         success: true,
         status: 'CONNECTED',
-        message: `Connected successfully to HackerRank user @${res.stats.username} (${res.stats.badges.length} domain badges, ${res.stats.certificates.length} certificates). Real-time notifications synced.`,
+        message: `Connected successfully to HackerRank user @${res.stats.username} (${res.stats.badges.length} domain badges, ${res.stats.certificates.length} certificates, ${res.stats.courses?.length || 0} active tracks). Real-time notifications synced.`,
         details: res.stats as any
       };
     } else {

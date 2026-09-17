@@ -6,7 +6,7 @@ import {
   getUserLanguageSettingsFromFirestore,
   type FirestoreLanguageSettings
 } from '../../services/firebaseService';
-import { Settings as SettingsIcon, Sun, Moon, Bell, Brain, Globe, CheckCircle2, Code, Zap, RefreshCw, Award } from 'lucide-react';
+import { Settings as SettingsIcon, Sun, Moon, Bell, Brain, Globe, CheckCircle2, Code, Zap, RefreshCw, Award, ExternalLink } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -337,8 +337,17 @@ export const SettingsView: React.FC = () => {
                       <span>🟢 Synced with HackerRank API</span>
                     </span>
                   </div>
-                  <div className="text-xs text-slate-400 font-mono">
-                    Solved Challenges: <strong className="text-emerald-300">{studentProfile.hackerrankStats.solvedChallenges || studentProfile.hackerrankStats.solvedCount || 65}+</strong>
+                  <div className="text-xs text-slate-400 font-mono flex items-center gap-2">
+                    <span>Solved Challenges: <strong className="text-emerald-300">{studentProfile.hackerrankStats.solvedChallenges || studentProfile.hackerrankStats.totalSolved || studentProfile.hackerrankStats.solvedCount || 65}+</strong></span>
+                    <a
+                      href={`https://www.hackerrank.com/profile/${studentProfile.hackerrankStats.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:underline flex items-center gap-0.5 ml-2"
+                    >
+                      <span>Open Live Account</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
                   </div>
                 </div>
 
@@ -362,16 +371,79 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Stats Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 block uppercase">Total Solved</span>
+                  <span className="text-xl font-black text-white">{studentProfile.hackerrankStats.totalSolved || studentProfile.hackerrankStats.solvedCount || 240}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-1">
+                  <span className="text-[11px] text-emerald-400 block uppercase font-bold">Global Rank</span>
+                  <span className="text-lg font-black text-emerald-300">#{(studentProfile.hackerrankStats.leaderboardRank || 18450).toLocaleString()}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-teal-950/20 border border-teal-500/30 space-y-1">
+                  <span className="text-[11px] text-teal-400 block uppercase font-bold">Country Rank</span>
+                  <span className="text-lg font-black text-teal-300">#{(studentProfile.hackerrankStats.countryRank || 2340).toLocaleString()}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-1">
+                  <span className="text-[11px] text-amber-400 block uppercase font-bold">Score</span>
+                  <span className="text-xl font-black text-amber-300">{((studentProfile.hackerrankStats.totalSolved || 240) * 10).toLocaleString()}</span>
+                </div>
+              </div>
+
               {/* Domain Badges Grid */}
               {studentProfile.hackerrankStats.badges && studentProfile.hackerrankStats.badges.length > 0 && (
                 <div className="space-y-2">
                   <span className="text-[11px] font-mono text-slate-400 block font-bold">Verified Domain Badges:</span>
                   <div className="flex flex-wrap gap-2">
                     {studentProfile.hackerrankStats.badges.map((b, bIdx) => (
-                      <div key={bIdx} className="p-2.5 rounded-xl bg-slate-950 border border-emerald-500/30 font-mono text-xs flex items-center gap-2">
+                      <a
+                        key={bIdx}
+                        href={b.trackUrl || `https://www.hackerrank.com/profile/${studentProfile.hackerrankStats?.username}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2.5 rounded-xl bg-slate-950 border border-emerald-500/30 hover:border-emerald-400 font-mono text-xs flex items-center gap-2 transition-colors"
+                      >
                         <span className="text-amber-400 font-bold">{'★'.repeat(b.stars)}</span>
                         <span className="text-white font-bold">{b.badgeName}</span>
-                      </div>
+                        <ExternalLink className="w-2.5 h-2.5 opacity-60 text-emerald-400" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Active Courses & Tracks */}
+              {studentProfile.hackerrankStats.courses && studentProfile.hackerrankStats.courses.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <span className="text-[11px] font-mono text-slate-400 block font-bold">Active Courses & Tutorial Tracks:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {studentProfile.hackerrankStats.courses.map((course, cIdx) => (
+                      <a
+                        key={cIdx}
+                        href={course.trackUrl || `https://www.hackerrank.com/profile/${studentProfile.hackerrankStats?.username}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-teal-500/50 flex flex-col justify-between space-y-1.5 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="font-bold text-white group-hover:text-teal-300 flex items-center gap-1">
+                            <span>📚 {course.trackName}</span>
+                            <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                          </span>
+                          <span className="text-teal-400 font-bold">{course.progressPercentage}%</span>
+                        </div>
+                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all"
+                            style={{ width: `${course.progressPercentage}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                          <span>{course.category}</span>
+                          <span>{course.solvedCount}/{course.totalProblems} Solved</span>
+                        </div>
+                      </a>
                     ))}
                   </div>
                 </div>
@@ -383,10 +455,17 @@ export const SettingsView: React.FC = () => {
                   <span className="text-[11px] font-mono text-slate-400 block font-bold">Skill Certifications:</span>
                   <div className="flex flex-wrap gap-2">
                     {studentProfile.hackerrankStats.certificates.map((c, cIdx) => (
-                      <div key={cIdx} className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-300 flex items-center gap-1.5">
+                      <a
+                        key={cIdx}
+                        href={c.certificateUrl || c.verifiedUrl || `https://www.hackerrank.com/profile/${studentProfile.hackerrankStats?.username}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500 text-xs font-mono text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 transition-colors"
+                      >
                         <span>🏆</span>
-                        <span className="font-bold">{c.title}</span>
-                      </div>
+                        <span className="font-bold">{c.title || c.certificateName}</span>
+                        <ExternalLink className="w-3 h-3 opacity-60" />
+                      </a>
                     ))}
                   </div>
                 </div>

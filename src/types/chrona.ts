@@ -671,6 +671,7 @@ export interface HackerRankBadgeItem {
   iconUrl?: string;
   category?: string;
   solvedCount?: number;
+  trackUrl?: string;
 }
 
 export interface HackerRankCertificateItem {
@@ -682,12 +683,35 @@ export interface HackerRankCertificateItem {
   certificateUrl?: string;
 }
 
+export interface HackerRankCourseTrack {
+  trackName: string;
+  category?: string;
+  progressPercentage: number;
+  solvedCount: number;
+  totalProblems: number;
+  trackUrl: string;
+}
+
+export interface HackerRankRecentActivity {
+  challengeTitle: string;
+  domain: string;
+  language?: string;
+  score: number;
+  solvedAt: string;
+  challengeUrl: string;
+}
+
 export interface HackerRankStats {
   username: string;
   name?: string;
   avatarUrl?: string;
+  profileUrl?: string;
+  school?: string;
+  country?: string;
   badges: HackerRankBadgeItem[];
   certificates: HackerRankCertificateItem[];
+  courses?: HackerRankCourseTrack[];
+  recentActivities?: HackerRankRecentActivity[];
   totalSolved: number;
   solvedChallenges?: number;
   solvedCount?: number;
@@ -704,14 +728,20 @@ export interface HackerRankIntegrationConfig {
   errorMessage?: string;
   lastTestedAt?: string;
   avatarUrl?: string;
+  profileUrl?: string;
   name?: string;
+  school?: string;
+  country?: string;
   totalSolved?: number;
   solvedCount?: number;
   leaderboardRank?: number;
+  countryRank?: number;
   score?: number;
   badges?: HackerRankBadgeItem[];
   domainBadges?: HackerRankBadgeItem[];
   certificates?: HackerRankCertificateItem[];
+  courses?: HackerRankCourseTrack[];
+  recentActivities?: HackerRankRecentActivity[];
 }
 
 export interface ChronaIntegrationRecord {
