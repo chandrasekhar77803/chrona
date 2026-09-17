@@ -110,6 +110,7 @@ class VoiceService {
   private sessionInterimText: string = '';
 
   private currentOptions: VoiceSessionOptions | null = null;
+  private isExplicitlyStopped: boolean = false;
   private useAiFallback: boolean = false;
 
   public isSupported(): boolean {
