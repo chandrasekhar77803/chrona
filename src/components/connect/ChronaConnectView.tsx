@@ -1620,7 +1620,7 @@ export const ChronaConnectView: React.FC = () => {
                         </div>
                       </div>
                       <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 font-bold">
-                        +{hackerRankConfig.solvedCount || hackerRankConfig.totalSolved || 65} Challenges Solved
+                        +{hackerRankConfig.solvedCount || hackerRankConfig.totalSolved || 0} Challenges Solved
                       </span>
                     </div>
 
@@ -1628,26 +1628,26 @@ export const ChronaConnectView: React.FC = () => {
                     <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-mono">
                       <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
                         <span className="text-slate-400 block text-[9px]">Solved</span>
-                        <span className="font-bold text-white">{hackerRankConfig.totalSolved || hackerRankConfig.solvedCount || 240}</span>
+                        <span className="font-bold text-white">{hackerRankConfig.totalSolved || hackerRankConfig.solvedCount || 0}</span>
                       </div>
                       <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
                         <span className="text-slate-400 block text-[9px]">Global Rank</span>
-                        <span className="font-bold text-emerald-400">#{(hackerRankConfig.leaderboardRank || 18450).toLocaleString()}</span>
+                        <span className="font-bold text-emerald-400">{hackerRankConfig.leaderboardRank ? `#${hackerRankConfig.leaderboardRank.toLocaleString()}` : 'N/A'}</span>
                       </div>
                       <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
                         <span className="text-slate-400 block text-[9px]">Country</span>
-                        <span className="font-bold text-teal-400">#{(hackerRankConfig.countryRank || 2340).toLocaleString()}</span>
+                        <span className="font-bold text-teal-400">{hackerRankConfig.countryRank ? `#${hackerRankConfig.countryRank.toLocaleString()}` : 'N/A'}</span>
                       </div>
                       <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
                         <span className="text-slate-400 block text-[9px]">Score</span>
-                        <span className="font-bold text-amber-400">{((hackerRankConfig.totalSolved || 240) * 10).toLocaleString()}</span>
+                        <span className="font-bold text-amber-400">{(hackerRankConfig.score || (hackerRankConfig.totalSolved || 0) * 10).toLocaleString()}</span>
                       </div>
                     </div>
 
                     {/* Domain Badges */}
-                    {(hackerRankConfig.domainBadges || hackerRankConfig.badges) && (
-                      <div className="space-y-1.5 pt-1">
-                        <span className="text-[10px] font-mono text-slate-400 block font-bold">Verified Domain Badges:</span>
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[10px] font-mono text-slate-400 block font-bold">Verified Domain Badges:</span>
+                      {(hackerRankConfig.domainBadges || hackerRankConfig.badges || []).length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {(hackerRankConfig.domainBadges || hackerRankConfig.badges || []).map((badge, bIdx) => (
                             <a
@@ -1664,8 +1664,21 @@ export const ChronaConnectView: React.FC = () => {
                             </a>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                          <span>No domain badges earned yet on this HackerRank account.</span>
+                          <a
+                            href="https://www.hackerrank.com/domains"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-400 hover:underline flex items-center gap-1"
+                          >
+                            <span>Start Solving</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Active Courses & Tracks */}
                     {hackerRankConfig.courses && hackerRankConfig.courses.length > 0 && (
@@ -1704,9 +1717,20 @@ export const ChronaConnectView: React.FC = () => {
                     )}
 
                     {/* Skill Certificates */}
-                    {hackerRankConfig.certificates && hackerRankConfig.certificates.length > 0 && (
-                      <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                      <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono text-slate-400 block font-bold">Certificates & Skill Assessments:</span>
+                        <a
+                          href="https://www.hackerrank.com/skills-verification"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-mono text-emerald-400 hover:underline flex items-center gap-1"
+                        >
+                          <span>Take Skill Assessment</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                      {hackerRankConfig.certificates && hackerRankConfig.certificates.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {hackerRankConfig.certificates.map((cert, cIdx) => (
                             <a
@@ -1722,8 +1746,20 @@ export const ChronaConnectView: React.FC = () => {
                             </a>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                          <span>No verified certificates on this account yet.</span>
+                          <a
+                            href="https://www.hackerrank.com/skills-verification"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 font-bold hover:bg-emerald-900 transition-colors"
+                          >
+                            Get Certified ↗
+                          </a>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Recent Activities */}
                     {hackerRankConfig.recentActivities && hackerRankConfig.recentActivities.length > 0 && (

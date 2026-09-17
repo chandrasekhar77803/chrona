@@ -5,6 +5,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/hackerrank/(.*)",
+      "destination": "https://www.hackerrank.com/rest/hackers/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
