@@ -476,20 +476,31 @@ export const ChronaConnectView: React.FC = () => {
     setIsTestingGitHub(true);
     setGhFeedback(null);
     try {
+      const token = ghToken.trim().replace(/^["']|["']$/g, '');
+      const user = ghUsername.trim();
+
+      if (!token && !user) {
+        setGhFeedback({ type: 'error', text: 'Please enter your GitHub Personal Access Token or GitHub Username.' });
+        setIsTestingGitHub(false);
+        return;
+      }
+
       const result = await testGitHub({
-        personalAccessToken: ghToken.trim(),
-        username: ghUsername.trim(),
+        personalAccessToken: token,
+        username: user,
         status: gitHubConfig.status
       });
+
       if (result.success) {
         setGhFeedback({ type: 'success', text: `✅ ${result.message}` });
       } else {
         setGhFeedback({ type: 'error', text: `❌ ${result.message}` });
       }
     } catch (err: any) {
+      console.error('[ChronaConnect] GitHub Test Error:', err);
       setGhFeedback({
         type: 'error',
-        text: 'Connection failed — please check your GitHub token or username.'
+        text: `Connection failed: ${err?.message || 'Please check your GitHub token or network connection.'}`
       });
     } finally {
       setIsTestingGitHub(false);

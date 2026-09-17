@@ -1027,32 +1027,32 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const saveGitHubSettings = async (cfg: Partial<GitHubIntegrationConfig>): Promise<GitHubIntegrationConfig> => {
-    if (!currentUser) return DEFAULT_GITHUB_CONFIG;
-    const updated = await saveGitHubConfig(currentUser.id, cfg);
+    const userId = currentUser?.id || 'guest';
+    const updated = await saveGitHubConfig(userId, cfg);
     setGitHubConfig(updated);
     return updated;
   };
 
   const testLinkedIn = async (config?: LinkedInIntegrationConfig): Promise<ConnectionTestResult> => {
-    if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
-    const res = await testLinkedInConnection(currentUser.id, config || linkedInConfig);
-    const updated = await getLinkedInConfig(currentUser.id);
+    const userId = currentUser?.id || 'guest';
+    const res = await testLinkedInConnection(userId, config || linkedInConfig);
+    const updated = await getLinkedInConfig(userId);
     setLinkedInConfig(updated);
     return res;
   };
 
   const testWhatsApp = async (config?: WhatsAppIntegrationConfig): Promise<ConnectionTestResult> => {
-    if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
-    const res = await testWhatsAppConnection(currentUser.id, config || whatsAppConfig);
-    const updated = await getWhatsAppConfig(currentUser.id);
+    const userId = currentUser?.id || 'guest';
+    const res = await testWhatsAppConnection(userId, config || whatsAppConfig);
+    const updated = await getWhatsAppConfig(userId);
     setWhatsAppConfig(updated);
     return res;
   };
 
   const testGitHub = async (config?: GitHubIntegrationConfig): Promise<ConnectionTestResult> => {
-    if (!currentUser) return { success: false, status: 'NOT_CONFIGURED', message: 'User not logged in' };
-    const res = await testGitHubConnection(currentUser.id, config || gitHubConfig);
-    const updated = await getGitHubConfig(currentUser.id);
+    const userId = currentUser?.id || 'guest';
+    const res = await testGitHubConnection(userId, config || gitHubConfig);
+    const updated = await getGitHubConfig(userId);
     setGitHubConfig(updated);
     return res;
   };

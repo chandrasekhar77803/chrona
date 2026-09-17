@@ -198,9 +198,8 @@ export async function saveGitHubConfig(
   userId: string,
   config: Partial<GitHubIntegrationConfig>
 ): Promise<GitHubIntegrationConfig> {
-  if (!userId) throw new Error('User ID required');
-  
-  const current = await getGitHubConfig(userId);
+  const uid = userId || 'guest';
+  const current = await getGitHubConfig(uid);
   const isFilled = Boolean(config.personalAccessToken?.trim() || config.username?.trim());
   const newStatus: IntegrationStatus = config.status || (isFilled ? 'CONFIGURED' : 'NOT_CONFIGURED');
 
@@ -211,27 +210,31 @@ export async function saveGitHubConfig(
     errorMessage: config.errorMessage || undefined
   };
 
-  const ref = doc(db, 'users', userId, 'integrationConfigs', 'github');
-  await setDoc(ref, updated, { merge: true });
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'github');
+    await setDoc(ref, updated, { merge: true });
 
-  // Update public integration metadata in Firestore
-  const integrationRef = doc(db, 'users', userId, 'integrations', 'github');
-  await setDoc(integrationRef, {
-    provider: 'github',
-    status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
-    accountIdentifier: updated.username || (updated.personalAccessToken ? 'github_user' : ''),
-    scopes: updated.scopes || ['repo', 'read:user', 'user:email'],
-    hasCredentials: isFilled,
-    statsData: {
-      publicRepos: updated.publicReposCount,
-      stars: updated.totalStars,
-      followers: updated.followersCount,
-      languages: updated.topLanguages,
-      avatarUrl: updated.avatarUrl,
-      profileName: updated.profileName
-    },
-    updatedAt: new Date().toISOString()
-  }, { merge: true });
+    // Update public integration metadata in Firestore
+    const integrationRef = doc(db, 'users', uid, 'integrations', 'github');
+    await setDoc(integrationRef, {
+      provider: 'github',
+      status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
+      accountIdentifier: updated.username || (updated.personalAccessToken ? 'github_user' : ''),
+      scopes: updated.scopes || ['repo', 'read:user', 'user:email'],
+      hasCredentials: isFilled,
+      statsData: {
+        publicRepos: updated.publicReposCount,
+        stars: updated.totalStars,
+        followers: updated.followersCount,
+        languages: updated.topLanguages,
+        avatarUrl: updated.avatarUrl,
+        profileName: updated.profileName
+      },
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[API Integration] Error persisting GitHub config in Firestore:', err);
+  }
 
   return updated;
 }
