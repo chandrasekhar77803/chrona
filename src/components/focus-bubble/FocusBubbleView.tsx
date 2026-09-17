@@ -16,6 +16,7 @@ import {
   Music,
   AlertTriangle
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const FocusBubbleView: React.FC = () => {
   const { missions, toggleMission } = useChrona();
@@ -185,8 +186,9 @@ export const FocusBubbleView: React.FC = () => {
               <Sparkles className="w-4 h-4 animate-spin-slow" />
               <span>DISTRACTION-FREE FOCUS BUBBLE WORKSPACE</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-              AI Deep Work Chamber
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-3">
+              <span>AI Deep Work Chamber</span>
+              <FeatureRatingBadge featureId="focus-bubble" variant="standard" />
             </h1>
             <p className="text-sm text-slate-300 mt-1">
               Mutes notifications, plays ambient soundscapes, and locks your focus to mission tasks.

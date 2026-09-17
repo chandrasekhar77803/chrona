@@ -22,6 +22,7 @@ import {
   Clock,
   Award
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const SmartNotesView: React.FC = () => {
   const { currentUser } = useAuth();
@@ -496,6 +497,7 @@ Return ONLY valid JSON with this exact structure:
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-3">
               <span>🎙️ Smart Voice & Lecture Notes</span>
+              <FeatureRatingBadge featureId="smart-notes" variant="standard" />
               {recordingStatus === 'Listening' && (
                 <span className="text-xs font-mono px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
                   🔴 Listening

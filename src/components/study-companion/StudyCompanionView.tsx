@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import JSZip from 'jszip';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
@@ -834,7 +835,10 @@ Generate the complete study package JSON based strictly on these document passag
             <Sparkles className="w-4 h-4 text-cyan-400 animate-spin-slow" />
             <span>NVIDIA API • Meta Llama 3.2 90B Vision Instruct AI Engine</span>
           </div>
-          <h1 className="text-2xl font-black text-white">AI Study Companion & Document Intelligence</h1>
+          <h1 className="text-2xl font-black text-white flex items-center gap-3">
+            <span>AI Study Companion & Document Intelligence</span>
+            <FeatureRatingBadge featureId="ai-study-companion" variant="standard" />
+          </h1>
           <p className="text-xs text-slate-300 mt-1">
             Upload or drag & drop PDFs, PowerPoints, Notes, or Photos. Chrona generates 8–12 unique flashcards, executive summaries, exam questions with model answers & formula sheets.
           </p>

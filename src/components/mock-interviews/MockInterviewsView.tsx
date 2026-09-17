@@ -33,6 +33,7 @@ import {
   UserCheck,
   Volume2
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const MockInterviewsView: React.FC = () => {
   const { currentUser } = useAuth();
@@ -497,6 +498,7 @@ Return ONLY valid JSON:
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
               <span>🎙️ AI Mock Interviewer: {targetCompany} ({targetRole})</span>
+              <FeatureRatingBadge featureId="mock-interview" variant="standard" />
             </h1>
             <p className="text-xs text-slate-300 mt-1">
               Dynamic question engine with real-time speech deduplication & full interview analysis storage.
@@ -512,14 +514,17 @@ Return ONLY valid JSON:
             >
               🎙️ Voice/Video Interview
             </button>
-            <button
-              onClick={() => setActiveTab('coding')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${
-                activeTab === 'coding' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-              }`}
-            >
-              💻 Coding Round
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setActiveTab('coding')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${
+                  activeTab === 'coding' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                }`}
+              >
+                💻 Coding Round
+              </button>
+              <FeatureRatingBadge featureId="coding-round" variant="compact" />
+            </div>
             <button
               onClick={() => setActiveTab('history')}
               className={`px-4 py-2 rounded-xl text-xs font-bold font-mono cursor-pointer transition-all ${

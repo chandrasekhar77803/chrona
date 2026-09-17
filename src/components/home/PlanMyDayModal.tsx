@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { syncDailyPlannerToFirestore } from '../../services/firebaseService';
 import { VoiceInputField } from '../common/VoiceInputField';
 import { parseSpokenTimeSlot } from '../../utils/timeSlotParser';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 interface Props {
   isOpen: boolean;
@@ -174,7 +175,10 @@ Return ONLY valid JSON array with 6-8 timetable slots:
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-white">📅 Plan My Day — AI Assistant</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-extrabold text-white">📅 Plan My Day — AI Assistant</h2>
+                <FeatureRatingBadge featureId="plan-my-day" variant="standard" />
+              </div>
               <p className="text-xs text-slate-400">Step {step} of 6 • Personalized schedule calculation</p>
             </div>
           </div>

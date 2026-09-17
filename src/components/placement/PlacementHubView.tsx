@@ -24,6 +24,7 @@ import {
   Zap,
   X
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 import type {
   PlacementReadinessBreakdown,
   CompanyMatchResult,
@@ -185,6 +186,7 @@ export const PlacementHubView: React.FC = () => {
             <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold">
               {readiness.overallScore}% Placement Ready
             </span>
+            <FeatureRatingBadge featureId="placement-gps" variant="standard" />
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 max-w-xl font-mono">
             Targeting <strong>{studentProfile.dreamCompany} ({studentProfile.careerGoal})</strong>. Your profile dynamically updates as you complete projects, DSA, resume building & mock interviews.

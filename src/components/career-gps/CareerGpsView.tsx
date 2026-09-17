@@ -23,6 +23,7 @@ import {
   Download,
   Share2
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const CareerGpsView: React.FC = () => {
   const { currentUser } = useAuth();
@@ -492,6 +493,7 @@ export const CareerGpsView: React.FC = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
               <span>🎯 Target: {targetCompany} ({careerGoal})</span>
+              <FeatureRatingBadge featureId="career-gps" variant="standard" />
             </h1>
             <p className="text-xs md:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
               Target Deadline: <strong className="text-amber-300 font-mono">{targetTime} ({remainingDays} Days Left)</strong> • Daily Capacity: <strong className="text-indigo-300 font-mono">{dailyHours} hrs/day ({weeklyDays} days/wk)</strong>
@@ -695,6 +697,7 @@ export const CareerGpsView: React.FC = () => {
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Compass className="w-5 h-5 text-indigo-400" />
               <span>Full-Horizon AI Career Mentor Roadmap for {targetCompany}</span>
+              <FeatureRatingBadge featureId="thirty-day-plan" variant="pill" />
             </h2>
             <p className="text-xs text-slate-400">Complete day-by-day execution plan for all {remainingDays} days ({totalStudyHoursAvailable} total study hours).</p>
           </div>
@@ -921,6 +924,7 @@ export const CareerGpsView: React.FC = () => {
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <BarChart className="w-5 h-5 text-purple-400" />
             <span>Skill Gap Analysis for {targetCompany}</span>
+            <FeatureRatingBadge featureId="skill-gap" variant="pill" />
           </h3>
 
           {localSkillGaps.length === 0 ? (

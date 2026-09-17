@@ -16,6 +16,7 @@ import {
 import { VoiceInputField } from '../common/VoiceInputField';
 import { VoiceBiometricsModal } from './VoiceBiometricsModal';
 import { SPEECH_LANG_CODES, type LanguageCode } from '../../utils/i18n';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 import {
   Sparkles,
   ShieldAlert,
@@ -249,6 +250,7 @@ export const ChronaMentorView: React.FC = () => {
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[10px] font-bold">
                   Personal AI Guide
                 </span>
+                <FeatureRatingBadge featureId="chrona-mentor" variant="standard" />
               </div>
               <p className="text-xs text-slate-300">
                 Connected to your Career GPS, Today's Mission, Calendar & Well-being Check-ins.

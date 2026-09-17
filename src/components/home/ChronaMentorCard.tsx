@@ -11,6 +11,7 @@ import {
   Zap
 } from 'lucide-react';
 import type { WellbeingCheckin } from '../../types/chrona';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const ChronaMentorCard: React.FC = () => {
   const { currentUser } = useAuth();
@@ -64,6 +65,7 @@ export const ChronaMentorCard: React.FC = () => {
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
                 Personal AI Guide
               </span>
+              <FeatureRatingBadge featureId="chrona-mentor" variant="standard" />
             </div>
             <p className="text-xs text-slate-300">
               "Good day, {studentProfile.name}! I reviewed your target for <strong className="text-indigo-300">{studentProfile.dreamCompany}</strong>."

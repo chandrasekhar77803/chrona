@@ -11,6 +11,7 @@ import {
   Target
 } from 'lucide-react';
 import type { CareerRecommendationMatch, UserCareerAssessmentRecord } from '../../types/chrona';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 interface CareerMatchesViewProps {
   assessmentRecord: UserCareerAssessmentRecord;
@@ -46,6 +47,7 @@ export const CareerMatchesView: React.FC<CareerMatchesViewProps> = ({
             <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-[10px] font-bold">
               {matches.length} Paths Discovered
             </span>
+            <FeatureRatingBadge featureId="career-recommendation" variant="standard" />
           </div>
           <p className="text-xs text-slate-300 mt-1 font-mono">
             Analyzed from your academic background, coding/math affinity, work style, and career priorities.

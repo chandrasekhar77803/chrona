@@ -12,6 +12,7 @@ import {
   User,
   KeyRound
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export interface PlatformConfig {
   id: string;
@@ -314,6 +315,7 @@ export const ChronaConnectView: React.FC = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
               <span>🌐 Chrona Connect: Opportunity Engine</span>
+              <FeatureRatingBadge featureId="chrona-connect" variant="standard" />
             </h1>
             <p className="text-xs text-slate-300 mt-1">
               Authorize platform metrics, competitive coding progress, and career opportunity notifications with 100% explicit user control.

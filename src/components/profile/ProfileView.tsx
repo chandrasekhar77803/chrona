@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useChrona } from '../../context/ChronaContext';
 import { getUserCertificatesFromFirestore, type FirestoreCertificate } from '../../services/firebaseService';
 import { Award, Code2, ExternalLink, CheckCircle2, Star } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const ProfileView: React.FC = () => {
   const { currentUser } = useAuth();
@@ -41,6 +42,7 @@ export const ProfileView: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 {studentProfile.dreamCompany || 'Google'} Target candidate
               </span>
+              <FeatureRatingBadge featureId="resume" variant="compact" />
             </div>
 
             <p className="text-xs text-slate-300 font-medium">
@@ -64,9 +66,12 @@ export const ProfileView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* SKILLS */}
         <div className="glass-panel p-6 rounded-2xl border border-slate-800">
-          <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-            <Code2 className="w-5 h-5 text-indigo-400" />
-            <span>Mastered Technical Skills</span>
+          <h3 className="text-base font-bold text-white mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Code2 className="w-5 h-5 text-indigo-400" />
+              <span>Mastered Technical Skills</span>
+            </div>
+            <FeatureRatingBadge featureId="skill-gap" variant="compact" />
           </h3>
 
           {hasSkills ? (

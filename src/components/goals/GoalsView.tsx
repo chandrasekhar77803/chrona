@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useChrona } from '../../context/ChronaContext';
 import type { GoalItem } from '../../types/chrona';
 import { CheckCircle2, Circle, Plus, ChevronRight, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const GoalsView: React.FC = () => {
   const { goals, addGoal, addCustomMission } = useChrona();
@@ -231,8 +232,9 @@ Return ONLY valid JSON with this exact structure:
               <Sparkles className="w-4 h-4 text-purple-400 animate-spin-slow" />
               <span>NVIDIA API • Meta Llama 3.2 90B Vision Instruct Engine</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Goals into Executable Timelines
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-3">
+              <span>Goals into Executable Timelines</span>
+              <FeatureRatingBadge featureId="goals-milestones" variant="standard" />
             </h1>
             <p className="text-sm text-slate-300 mt-1">
               NVIDIA AI automatically breaks user ambitions (GATE, Google, AI Startup) into absolute roadmaps, AI risk factor predictions & syncable daily missions.

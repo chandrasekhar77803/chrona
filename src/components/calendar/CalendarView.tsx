@@ -11,6 +11,7 @@ import {
 } from '../../services/firebaseService';
 import { VoiceInputField } from '../common/VoiceInputField';
 import { parseSpokenTimeSlot } from '../../utils/timeSlotParser';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -255,6 +256,7 @@ export const CalendarView: React.FC = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
               <span>📅 AI Central Master Calendar</span>
+              <FeatureRatingBadge featureId="ai-calendar" variant="standard" />
             </h1>
             <p className="text-xs text-slate-300 mt-1">
               Synchronized with Today's Mission, Career GPS Roadmaps, Plan My Day & Personal Deadlines.

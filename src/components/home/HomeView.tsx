@@ -5,6 +5,7 @@ import { PlanMyDayModal } from './PlanMyDayModal';
 import { ChronaMentorCard } from './ChronaMentorCard';
 import { VoiceInputField } from '../common/VoiceInputField';
 import { parseSpokenTimeSlot } from '../../utils/timeSlotParser';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 import {
   CheckCircle2,
   Circle,
@@ -158,6 +159,7 @@ export const HomeView: React.FC = () => {
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-indigo-400" />
               <h2 className="text-lg font-extrabold text-white">Today's Mission Checklist</h2>
+              <FeatureRatingBadge featureId="todays-mission" variant="standard" />
             </div>
             <p className="text-xs text-slate-400">
               Personalized & user-defined tasks automatically tuned to your goal.
@@ -194,13 +196,16 @@ export const HomeView: React.FC = () => {
             </div>
 
             {/* Plan My Day Button */}
-            <button
-              onClick={() => setIsPlanMyDayOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>📅 Plan My Day</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setIsPlanMyDayOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>📅 Plan My Day</span>
+              </button>
+              <FeatureRatingBadge featureId="plan-my-day" variant="compact" />
+            </div>
 
             {/* 12 AM Midnight Reset Badge */}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-purple-300">

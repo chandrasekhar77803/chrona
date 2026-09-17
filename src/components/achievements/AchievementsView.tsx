@@ -22,6 +22,7 @@ import {
   Users,
   Zap
 } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const AchievementsView: React.FC = () => {
   const { currentUser } = useAuth();
@@ -182,6 +183,7 @@ export const AchievementsView: React.FC = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
               <span>🏆 Achievements & Verifiable AI Certificates</span>
+              <FeatureRatingBadge featureId="achievements" variant="standard" />
             </h1>
             <p className="text-xs text-slate-300 mt-1">
               Earn verified AI credentials for streaks, roadmap completion, mock interview scores, and placement readiness.

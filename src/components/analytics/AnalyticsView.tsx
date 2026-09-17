@@ -12,6 +12,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { BarChart3, TrendingUp, Zap } from 'lucide-react';
+import { FeatureRatingBadge } from '../common/FeatureRatingBadge';
 
 export const AnalyticsView: React.FC = () => {
   const { missions, studentProfile } = useChrona();
@@ -39,8 +40,9 @@ export const AnalyticsView: React.FC = () => {
               <BarChart3 className="w-4 h-4 animate-spin-slow" />
               <span>TIME INTELLIGENCE ANALYTICS DASHBOARD</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Student Growth & Productivity Metrics
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-3">
+              <span>Student Growth & Productivity Metrics</span>
+              <FeatureRatingBadge featureId="analytics" variant="standard" />
             </h1>
             <p className="text-sm text-slate-300 mt-1">
               Real-time velocity tracking, focus trend lines, and placement readiness trajectory for your workspace.
