@@ -113,8 +113,10 @@ class VoiceService {
       this.currentOptions.onStatusChange('starting');
     }
 
-    // Verify microphone access
+    // Verify microphone access and release test stream immediately so SpeechRecognition has exclusive audio device access
     const hasPermission = await this.requestMicrophonePermission();
+    this.releaseMicrophoneStream();
+
     if (!hasPermission) {
       this.status = 'error';
       if (this.currentOptions?.onStatusChange) {
