@@ -110,7 +110,6 @@ class VoiceService {
   private sessionInterimText: string = '';
 
   private currentOptions: VoiceSessionOptions | null = null;
-  private isExplicitlyStopped: boolean = false;
   private useAiFallback: boolean = false;
 
   public isSupported(): boolean {
@@ -184,7 +183,6 @@ class VoiceService {
     this.baseInitialText = (options.initialText || '').trim();
     this.sessionFinalText = '';
     this.sessionInterimText = '';
-    this.isExplicitlyStopped = false;
     this.useAiFallback = false;
     this.recordedChunks = [];
 
@@ -332,8 +330,6 @@ class VoiceService {
    * Stop active session cleanly and finalize transcript (with Gemini AI Transcriber if needed)
    */
   public async stopSession(finalize: boolean = true): Promise<void> {
-    this.isExplicitlyStopped = true;
-
     // Stop WebSpeech Recognition
     if (this.recognition) {
       try {
