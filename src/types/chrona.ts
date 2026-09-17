@@ -379,6 +379,8 @@ export interface StudentProfile {
     streakDays?: number;
     lastSyncedAt: string;
   };
+  hackerrankUsername?: string;
+  hackerrankStats?: HackerRankStats;
 }
 
 export interface UserDataStore {
@@ -662,8 +664,58 @@ export interface GitHubIntegrationConfig {
   topLanguages?: Array<{ language: string; count: number; percentage: number }>;
 }
 
+export interface HackerRankBadgeItem {
+  badgeName: string;
+  stars: number;
+  icon?: string;
+  iconUrl?: string;
+  category?: string;
+  solvedCount?: number;
+}
+
+export interface HackerRankCertificateItem {
+  certificateName: string;
+  title?: string;
+  certificateId?: string;
+  issuedDate?: string;
+  verifiedUrl?: string;
+  certificateUrl?: string;
+}
+
+export interface HackerRankStats {
+  username: string;
+  name?: string;
+  avatarUrl?: string;
+  badges: HackerRankBadgeItem[];
+  certificates: HackerRankCertificateItem[];
+  totalSolved: number;
+  solvedChallenges?: number;
+  solvedCount?: number;
+  leaderboardRank?: number;
+  countryRank?: number;
+  score?: number;
+  lastSyncedAt: string;
+}
+
+export interface HackerRankIntegrationConfig {
+  username?: string;
+  apiKey?: string;
+  status: IntegrationStatus;
+  errorMessage?: string;
+  lastTestedAt?: string;
+  avatarUrl?: string;
+  name?: string;
+  totalSolved?: number;
+  solvedCount?: number;
+  leaderboardRank?: number;
+  score?: number;
+  badges?: HackerRankBadgeItem[];
+  domainBadges?: HackerRankBadgeItem[];
+  certificates?: HackerRankCertificateItem[];
+}
+
 export interface ChronaIntegrationRecord {
-  provider: string; // 'linkedin' | 'whatsapp' | 'leetcode' | 'github' etc.
+  provider: string; // 'linkedin' | 'whatsapp' | 'leetcode' | 'github' | 'hackerrank' etc.
   status: IntegrationStatus;
   accountIdentifier?: string;
   scopes: string[];

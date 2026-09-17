@@ -33,6 +33,7 @@ import type {
   LinkedInIntegrationConfig,
   WhatsAppIntegrationConfig,
   GitHubIntegrationConfig,
+  HackerRankIntegrationConfig,
   IntegrationStatus,
   NotificationPriority,
   NavSection
@@ -41,6 +42,10 @@ import {
   verifyGitHubToken,
   fetchGitHubLiveNotifications
 } from './githubService';
+import {
+  verifyHackerRankUser,
+  fetchHackerRankLiveNotifications
+} from './hackerrankService';
 
 // Default empty configurations
 export const DEFAULT_LINKEDIN_CONFIG: LinkedInIntegrationConfig = {
@@ -69,6 +74,16 @@ export const DEFAULT_GITHUB_CONFIG: GitHubIntegrationConfig = {
   personalAccessToken: '',
   scopes: ['repo', 'read:user', 'user:email'],
   status: 'NOT_CONFIGURED'
+};
+
+export const DEFAULT_HACKERRANK_CONFIG: HackerRankIntegrationConfig = {
+  username: '',
+  apiKey: '',
+  status: 'NOT_CONFIGURED',
+  badges: [],
+  certificates: [],
+  totalSolved: 0,
+  leaderboardRank: 0
 };
 
 /**
@@ -302,6 +317,83 @@ export async function saveGitHubConfig(
     }, { merge: true });
   } catch (err) {
     console.warn('[API Integration] Error persisting GitHub config in Firestore:', err);
+  }
+
+  return updated;
+}
+
+export async function getHackerRankConfig(userId: string): Promise<HackerRankIntegrationConfig> {
+  const uid = userId || 'guest';
+  try {
+    const cached = localStorage.getItem(`chrona_hr_config_${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed) return { ...DEFAULT_HACKERRANK_CONFIG, ...parsed };
+    }
+  } catch {}
+
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'hackerrank');
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const config = { ...DEFAULT_HACKERRANK_CONFIG, ...snap.data() } as HackerRankIntegrationConfig;
+      try {
+        localStorage.setItem(`chrona_hr_config_${uid}`, JSON.stringify(config));
+      } catch {}
+      return config;
+    }
+  } catch (err) {
+    console.warn('[API Integration] Error loading HackerRank config:', err);
+  }
+  return { ...DEFAULT_HACKERRANK_CONFIG };
+}
+
+export async function saveHackerRankConfig(
+  userId: string,
+  config: Partial<HackerRankIntegrationConfig>
+): Promise<HackerRankIntegrationConfig> {
+  const uid = userId || 'guest';
+  const current = await getHackerRankConfig(uid);
+  const username = config.username !== undefined ? config.username : current.username;
+  const isFilled = Boolean(username?.trim());
+  const newStatus: IntegrationStatus = config.status || (isFilled ? 'CONFIGURED' : 'NOT_CONFIGURED');
+
+  const updated: HackerRankIntegrationConfig = {
+    ...current,
+    ...config,
+    username,
+    status: newStatus,
+    errorMessage: config.errorMessage || undefined
+  };
+
+  try {
+    localStorage.setItem(`chrona_hr_config_${uid}`, JSON.stringify(updated));
+  } catch {}
+
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'hackerrank');
+    await setDoc(ref, updated, { merge: true });
+
+    // Update public integration metadata in Firestore
+    const integrationRef = doc(db, 'users', uid, 'integrations', 'hackerrank');
+    await setDoc(integrationRef, {
+      provider: 'hackerrank',
+      status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
+      accountIdentifier: updated.username || '',
+      scopes: ['badges', 'certificates', 'leaderboard'],
+      hasCredentials: isFilled,
+      statsData: {
+        totalSolved: updated.totalSolved,
+        leaderboardRank: updated.leaderboardRank,
+        badgesCount: updated.badges?.length || 0,
+        certificatesCount: updated.certificates?.length || 0,
+        avatarUrl: updated.avatarUrl,
+        name: updated.name
+      },
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[API Integration] Error persisting HackerRank config in Firestore:', err);
   }
 
   return updated;
@@ -669,6 +761,83 @@ export async function testGitHubConnection(
   } catch (err: any) {
     const errorMsg = err?.message || 'Connection failed — unable to reach GitHub API.';
     await saveGitHubConfig(userId, {
+      status: 'SYNC_ERROR',
+      lastTestedAt: new Date().toISOString(),
+      errorMessage: errorMsg
+    });
+    return {
+      success: false,
+      status: 'SYNC_ERROR',
+      message: errorMsg
+    };
+  }
+}
+
+/**
+ * Test HackerRank connection and synchronize domain badges, certificates, and milestones
+ */
+export async function testHackerRankConnection(
+  userId: string,
+  config?: HackerRankIntegrationConfig
+): Promise<ConnectionTestResult> {
+  const activeConfig = config || (await getHackerRankConfig(userId));
+
+  if (!activeConfig.username?.trim()) {
+    return {
+      success: false,
+      status: 'NOT_CONFIGURED',
+      message: 'HackerRank not configured yet. Please enter your HackerRank Username.'
+    };
+  }
+
+  const username = activeConfig.username.trim();
+
+  try {
+    const res = await verifyHackerRankUser(username);
+
+    if (res.success && res.stats) {
+      const successConfig: Partial<HackerRankIntegrationConfig> = {
+        username: res.stats.username,
+        name: res.stats.name || res.stats.username,
+        avatarUrl: res.stats.avatarUrl,
+        totalSolved: res.stats.totalSolved,
+        leaderboardRank: res.stats.leaderboardRank,
+        badges: res.stats.badges,
+        certificates: res.stats.certificates,
+        status: 'CONNECTED',
+        lastTestedAt: new Date().toISOString(),
+        errorMessage: undefined
+      };
+
+      await saveHackerRankConfig(userId, successConfig);
+
+      try {
+        await syncProviderNotifications(userId, 'hackerrank', res.stats.username);
+      } catch (syncErr) {
+        console.warn('[API Integration] Notification sync warning for HackerRank:', syncErr);
+      }
+
+      return {
+        success: true,
+        status: 'CONNECTED',
+        message: `Connected successfully to HackerRank user @${res.stats.username} (${res.stats.badges.length} domain badges, ${res.stats.certificates.length} certificates). Real-time notifications synced.`,
+        details: res.stats as any
+      };
+    } else {
+      await saveHackerRankConfig(userId, {
+        status: 'SYNC_ERROR',
+        lastTestedAt: new Date().toISOString(),
+        errorMessage: res.message
+      });
+      return {
+        success: false,
+        status: 'SYNC_ERROR',
+        message: res.message
+      };
+    }
+  } catch (err: any) {
+    const errorMsg = err?.message || 'Connection failed — unable to reach HackerRank API.';
+    await saveHackerRankConfig(userId, {
       status: 'SYNC_ERROR',
       lastTestedAt: new Date().toISOString(),
       errorMessage: errorMsg
@@ -1278,6 +1447,23 @@ export async function syncProviderNotifications(
     }
   }
 
+  // Real-time live HackerRank event streaming
+  if (pKey === 'hackerrank') {
+    try {
+      const hrConfig = await getHackerRankConfig(userId);
+      const username = hrConfig.username || accountIdentifier || '';
+      if (username) {
+        const liveEvents = await fetchHackerRankLiveNotifications(userId, username);
+        for (const notif of liveEvents) {
+          const { added } = await storeNotificationWithDeduplication(userId, notif);
+          if (added) addedCount++;
+        }
+      }
+    } catch (err) {
+      console.warn('[API Integration] Live HackerRank events sync error:', err);
+    }
+  }
+
   const rawEvents = PLATFORM_EVENT_CATALOG[pKey] || [];
 
   for (const raw of rawEvents) {
@@ -1353,7 +1539,7 @@ export async function syncAllConnectedIntegrations(
 
 export async function syncProviderIntegration(
   userId: string,
-  provider: 'linkedin' | 'whatsapp' | string
+  provider: 'linkedin' | 'whatsapp' | 'github' | 'hackerrank' | string
 ): Promise<{ success: boolean; count: number; message: string }> {
   if (!userId) return { success: false, count: 0, message: 'User not logged in' };
 
@@ -1379,6 +1565,30 @@ export async function syncProviderIntegration(
       };
     }
     return await syncProviderNotifications(userId, 'whatsapp');
+  }
+
+  if (provider === 'github') {
+    const config = await getGitHubConfig(userId);
+    if (config.status !== 'CONNECTED') {
+      return {
+        success: false,
+        count: 0,
+        message: 'GitHub is not connected yet. Please configure and test credentials.'
+      };
+    }
+    return await syncProviderNotifications(userId, 'github', config.username);
+  }
+
+  if (provider === 'hackerrank') {
+    const config = await getHackerRankConfig(userId);
+    if (config.status !== 'CONNECTED') {
+      return {
+        success: false,
+        count: 0,
+        message: 'HackerRank is not connected yet. Please configure and test credentials.'
+      };
+    }
+    return await syncProviderNotifications(userId, 'hackerrank', config.username);
   }
 
   return await syncProviderNotifications(userId, provider);
@@ -1422,6 +1632,16 @@ export async function disconnectProviderIntegration(
       ...current,
       status: 'DISCONNECTED',
       personalAccessToken: '',
+      errorMessage: undefined
+    });
+  }
+
+  if (pKey === 'hackerrank') {
+    const current = await getHackerRankConfig(userId);
+    await saveHackerRankConfig(userId, {
+      ...current,
+      status: 'DISCONNECTED',
+      username: '',
       errorMessage: undefined
     });
   }

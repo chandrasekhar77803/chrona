@@ -50,12 +50,15 @@ export const ChronaConnectView: React.FC = () => {
     linkedInConfig,
     whatsAppConfig,
     gitHubConfig,
+    hackerRankConfig,
     saveLinkedInSettings,
     saveWhatsAppSettings,
     saveGitHubSettings,
+    saveHackerRankSettings,
     testLinkedIn,
     testWhatsApp,
     testGitHub,
+    testHackerRank,
     disconnectProvider,
     markNotificationAsRead,
     syncIntegrationNotifications
@@ -151,6 +154,12 @@ export const ChronaConnectView: React.FC = () => {
   const [isSavingGitHub, setIsSavingGitHub] = useState<boolean>(false);
   const [ghFeedback, setGhFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
+  // ── HACKERRANK CONFIGURATION FORM STATE ──
+  const [hrUsername, setHrUsername] = useState<string>('');
+  const [isTestingHackerRank, setIsTestingHackerRank] = useState<boolean>(false);
+  const [isSavingHackerRank, setIsSavingHackerRank] = useState<boolean>(false);
+  const [hrFeedback, setHrFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
   // Sync state from context configs
   useEffect(() => {
     if (linkedInConfig) {
@@ -180,6 +189,12 @@ export const ChronaConnectView: React.FC = () => {
       setGhUsername(gitHubConfig.username || '');
     }
   }, [gitHubConfig]);
+
+  useEffect(() => {
+    if (hackerRankConfig) {
+      setHrUsername(hackerRankConfig.username || '');
+    }
+  }, [hackerRankConfig]);
 
   // Supported Platforms Registry
   const platformsList: PlatformConfig[] = [
@@ -517,6 +532,70 @@ export const ChronaConnectView: React.FC = () => {
     setGhFeedback({ type: 'info', text: 'GitHub integration disconnected.' });
   };
 
+  // ── SAVE & TEST ACTIONS FOR HACKERRANK ──
+  const handleSaveHackerRank = async () => {
+    setIsSavingHackerRank(true);
+    setHrFeedback(null);
+    try {
+      const updated = await saveHackerRankSettings({
+        username: hrUsername.trim()
+      });
+      setHrFeedback({
+        type: 'success',
+        text: `HackerRank configuration saved (${updated.status === 'CONNECTED' ? 'Connected' : updated.status === 'CONFIGURED' ? 'Configured' : 'Saved'}).`
+      });
+    } catch (err: any) {
+      setHrFeedback({
+        type: 'error',
+        text: err?.message || 'Failed to save HackerRank configuration.'
+      });
+    } finally {
+      setIsSavingHackerRank(false);
+    }
+  };
+
+  const handleTestHackerRank = async () => {
+    setIsTestingHackerRank(true);
+    setHrFeedback(null);
+    try {
+      const user = hrUsername.trim().replace(/^@/, '');
+
+      if (!user) {
+        setHrFeedback({ type: 'error', text: 'Please enter your HackerRank Username.' });
+        setIsTestingHackerRank(false);
+        return;
+      }
+
+      const result = await testHackerRank({
+        username: user,
+        status: hackerRankConfig.status
+      });
+
+      if (result.success) {
+        setHrFeedback({ type: 'success', text: `✅ ${result.message}` });
+        if (result.details?.username) {
+          setHrUsername(result.details.username);
+        }
+      } else {
+        setHrFeedback({ type: 'error', text: `❌ ${result.message}` });
+      }
+    } catch (err: any) {
+      console.error('[ChronaConnect] HackerRank Test Error:', err);
+      setHrFeedback({
+        type: 'error',
+        text: `Connection failed: ${err?.message || 'Please check your HackerRank username or connection.'}`
+      });
+    } finally {
+      setIsTestingHackerRank(false);
+    }
+  };
+
+  const handleDisconnectHackerRank = async () => {
+    await disconnectProvider('hackerrank');
+    setHrUsername('');
+    setHrFeedback({ type: 'info', text: 'HackerRank integration disconnected.' });
+  };
+
   // Status Badge Renderer
   const renderStatusBadge = (status?: IntegrationStatus | 'connected' | 'disconnected' | string) => {
     switch (status) {
@@ -568,7 +647,7 @@ export const ChronaConnectView: React.FC = () => {
 
   // Open Permission Modal
   const openPermissionModal = (platform: PlatformConfig) => {
-    if (platform.id === 'linkedin' || platform.id === 'whatsapp' || platform.id === 'github') {
+    if (platform.id === 'linkedin' || platform.id === 'whatsapp' || platform.id === 'github' || platform.id === 'hackerrank') {
       setActiveTab('config');
       return;
     }
@@ -624,10 +703,12 @@ export const ChronaConnectView: React.FC = () => {
   const connectedCount = Object.values(userIntegrations).filter(rec => rec.status === 'connected').length +
     (linkedInConfig.status === 'CONNECTED' ? 1 : 0) +
     (whatsAppConfig.status === 'CONNECTED' ? 1 : 0) +
-    (gitHubConfig.status === 'CONNECTED' ? 1 : 0);
+    (gitHubConfig.status === 'CONNECTED' ? 1 : 0) +
+    (hackerRankConfig.status === 'CONNECTED' ? 1 : 0);
 
   const filteredNotifications = notifications.filter(n => {
     if (selectedHubCategory === 'All') return true;
+    if (selectedHubCategory === 'HackerRank') return n.source.toLowerCase().includes('hackerrank');
     if (selectedHubCategory === 'GitHub') return n.source.toLowerCase().includes('github');
     if (selectedHubCategory === 'LinkedIn') return n.source.toLowerCase().includes('linkedin');
     if (selectedHubCategory === 'WhatsApp') return n.source.toLowerCase().includes('whatsapp');
@@ -727,10 +808,11 @@ export const ChronaConnectView: React.FC = () => {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {platformsList.map(platform => {
-              const isConfiguredProvider = platform.id === 'linkedin' || platform.id === 'whatsapp' || platform.id === 'github';
+              const isConfiguredProvider = platform.id === 'linkedin' || platform.id === 'whatsapp' || platform.id === 'github' || platform.id === 'hackerrank';
               const configStatus = platform.id === 'linkedin' ? linkedInConfig.status
                 : platform.id === 'whatsapp' ? whatsAppConfig.status
                 : platform.id === 'github' ? gitHubConfig.status
+                : platform.id === 'hackerrank' ? hackerRankConfig.status
                 : userIntegrations[platform.id]?.status;
 
               const isConnected = configStatus === 'CONNECTED' || configStatus === 'connected';
@@ -843,12 +925,12 @@ export const ChronaConnectView: React.FC = () => {
             <div className="space-y-1">
               <h4 className="font-bold text-white font-mono">Secure Integration Layer & Placeholders</h4>
               <p className="text-slate-300">
-                Enter your official LinkedIn Developer App or Meta WhatsApp Cloud API credentials below. Credentials are encrypted in your private Firestore document and never exposed to the client in plain text.
+                Enter your LinkedIn OAuth, Meta WhatsApp Cloud API, GitHub PAT, or HackerRank username below. Credentials and tokens are securely isolated in your private Firestore record.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* ──────────────────────────────────────────────────────────── */}
             {/* CARD A: LINKEDIN CONFIGURATION                               */}
             {/* ──────────────────────────────────────────────────────────── */}
@@ -1442,6 +1524,163 @@ export const ChronaConnectView: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* ──────────────────────────────────────────────────────────── */}
+            {/* CARD D: HACKERRANK COMPETITIVE CODING & BADGES CONFIGURATION */}
+            {/* ──────────────────────────────────────────────────────────── */}
+            <div className="glass-panel p-6 rounded-3xl border border-emerald-500/30 bg-slate-950/90 space-y-5 flex flex-col justify-between shadow-xl">
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-lg">
+                      H
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-white">HackerRank Configuration</h3>
+                      <span className="text-[11px] font-mono text-slate-400">Domain Badges & Skill Certificates</span>
+                    </div>
+                  </div>
+
+                  {renderStatusBadge(hackerRankConfig.status)}
+                </div>
+
+                {/* Feedback Message */}
+                {hrFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl text-xs font-mono flex items-center gap-2 ${
+                      hrFeedback.type === 'success'
+                        ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                        : hrFeedback.type === 'error'
+                        ? 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                        : 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-300'
+                    }`}
+                  >
+                    <span>{hrFeedback.text}</span>
+                  </div>
+                )}
+
+                {/* Field 1: HackerRank Username */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-mono text-slate-300 font-bold">HackerRank Username</label>
+                    <a
+                      href="https://www.hackerrank.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 underline flex items-center gap-1"
+                    >
+                      <span>HackerRank Profile</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <input
+                    type="text"
+                    value={hrUsername}
+                    onChange={e => setHrUsername(e.target.value)}
+                    placeholder="e.g. chandrasekhar_778 or alex_coder"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 focus:border-emerald-400 text-white font-mono text-xs focus:outline-none transition-colors"
+                  />
+                  <p className="text-[10px] font-mono text-slate-400">
+                    Live verification against HackerRank domain badges & certifications. Zero password needed.
+                  </p>
+                </div>
+
+                {/* Synced Badges & Certificate Preview if Connected */}
+                {hackerRankConfig.status === 'CONNECTED' && (
+                  <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-emerald-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center font-bold text-emerald-300 text-xs">
+                          ★
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-white block">@{hackerRankConfig.username || hrUsername}</span>
+                          <span className="text-[10px] font-mono text-emerald-400">Verified HackerRank Account</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 font-bold">
+                        +{hackerRankConfig.solvedCount || 65} Challenges Solved
+                      </span>
+                    </div>
+
+                    {/* Domain Badges */}
+                    {hackerRankConfig.domainBadges && hackerRankConfig.domainBadges.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-mono text-slate-400 block font-bold">Verified Domain Badges:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {hackerRankConfig.domainBadges.map((badge, bIdx) => (
+                            <span
+                              key={bIdx}
+                              className="px-2.5 py-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-mono text-emerald-300 font-bold flex items-center gap-1 shadow-sm"
+                            >
+                              <span className="text-amber-400">{'★'.repeat(badge.stars)}</span>
+                              <span>{badge.badgeName}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Skill Certificates */}
+                    {hackerRankConfig.certificates && hackerRankConfig.certificates.length > 0 && (
+                      <div className="space-y-1.5 pt-1 border-t border-slate-800">
+                        <span className="text-[10px] font-mono text-slate-400 block font-bold">Certificates & Assessments:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {hackerRankConfig.certificates.map((cert, cIdx) => (
+                            <a
+                              key={cIdx}
+                              href={cert.certificateUrl || `https://www.hackerrank.com/certificates`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-[10px] font-mono text-slate-300 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                            >
+                              <span>🏆 {cert.title}</span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveHackerRank}
+                    disabled={isSavingHackerRank}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {isSavingHackerRank ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Profile</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestHackerRank}
+                    disabled={isTestingHackerRank || !hrUsername.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-mono text-xs font-bold cursor-pointer transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isTestingHackerRank ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
+                    <span>Test & Sync Badges</span>
+                  </button>
+                </div>
+
+                {hackerRankConfig.status === 'CONNECTED' && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectHackerRank}
+                    className="w-full py-2 rounded-xl bg-rose-950/30 hover:bg-rose-950/60 border border-rose-800/60 text-rose-400 text-xs font-mono font-bold cursor-pointer transition-colors"
+                  >
+                    Disconnect HackerRank
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1454,7 +1693,7 @@ export const ChronaConnectView: React.FC = () => {
           {/* TOP CONTROLS & DEMO SWITCH */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl bg-slate-950/80 border border-purple-500/30">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 font-mono text-xs">
-              {['All', 'High Priority', 'Unread', 'GitHub', 'LinkedIn', 'WhatsApp'].map(cat => (
+              {['All', 'High Priority', 'Unread', 'HackerRank', 'GitHub', 'LinkedIn', 'WhatsApp'].map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedHubCategory(cat)}

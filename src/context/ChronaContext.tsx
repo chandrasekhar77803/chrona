@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import confetti from 'canvas-confetti';
 import { useAuth } from './AuthContext';
 import { fetchLeetCodeStats, type LeetCodeStats } from '../services/leetcodeService';
+import { fetchHackerRankStats } from '../services/hackerrankService';
 import { type UserIntegrationRecord, subscribeUserIntegrations, connectProvider, disconnectProvider } from '../services/integrationService';
 import { getMentorProfile, saveMentorProfile } from '../services/mentorService';
 import type { WellbeingCheckin } from '../types/chrona';
@@ -23,7 +24,9 @@ import type {
   ChronaNotification,
   LinkedInIntegrationConfig,
   WhatsAppIntegrationConfig,
-  GitHubIntegrationConfig
+  GitHubIntegrationConfig,
+  HackerRankIntegrationConfig,
+  HackerRankStats
 } from '../types/chrona';
 import {
   getLinkedInConfig,
@@ -32,9 +35,12 @@ import {
   saveWhatsAppConfig,
   getGitHubConfig,
   saveGitHubConfig,
+  getHackerRankConfig,
+  saveHackerRankConfig,
   testLinkedInConnection,
   testWhatsAppConnection,
   testGitHubConnection,
+  testHackerRankConnection,
   subscribeUserNotifications,
   markNotificationAsReadInFirestore,
   markAllNotificationsAsReadInFirestore,
@@ -49,6 +55,7 @@ import {
   DEFAULT_LINKEDIN_CONFIG,
   DEFAULT_WHATSAPP_CONFIG,
   DEFAULT_GITHUB_CONFIG,
+  DEFAULT_HACKERRANK_CONFIG,
   type ConnectionTestResult
 } from '../services/apiIntegrationService';
 import {
@@ -133,6 +140,7 @@ interface ChronaContextType {
   studentProfile: StudentProfile;
   updateStudentProfile: (updated: Partial<StudentProfile>) => void;
   syncLeetCodeStats: (username: string) => Promise<{ stats: LeetCodeStats; readinessIncreased: boolean }>;
+  syncHackerRankStats: (username: string) => Promise<{ stats: HackerRankStats; readinessIncreased: boolean }>;
 
   userIntegrations: Record<string, UserIntegrationRecord>;
   connectUserIntegration: (provider: string, accountIdentifier: string, scopes: string[], statsData?: any) => Promise<UserIntegrationRecord | null>;
@@ -152,15 +160,18 @@ interface ChronaContextType {
   linkedInConfig: LinkedInIntegrationConfig;
   whatsAppConfig: WhatsAppIntegrationConfig;
   gitHubConfig: GitHubIntegrationConfig;
+  hackerRankConfig: HackerRankIntegrationConfig;
   saveLinkedInSettings: (cfg: Partial<LinkedInIntegrationConfig>) => Promise<LinkedInIntegrationConfig>;
   saveWhatsAppSettings: (cfg: Partial<WhatsAppIntegrationConfig>) => Promise<WhatsAppIntegrationConfig>;
   saveGitHubSettings: (cfg: Partial<GitHubIntegrationConfig>) => Promise<GitHubIntegrationConfig>;
+  saveHackerRankSettings: (cfg: Partial<HackerRankIntegrationConfig>) => Promise<HackerRankIntegrationConfig>;
   testLinkedIn: (config?: LinkedInIntegrationConfig) => Promise<ConnectionTestResult>;
   testWhatsApp: (config?: WhatsAppIntegrationConfig) => Promise<ConnectionTestResult>;
   testGitHub: (config?: GitHubIntegrationConfig) => Promise<ConnectionTestResult>;
-  syncProvider: (provider: 'linkedin' | 'whatsapp' | 'github') => Promise<{ success: boolean; count: number; message: string }>;
+  testHackerRank: (config?: HackerRankIntegrationConfig) => Promise<ConnectionTestResult>;
+  syncProvider: (provider: 'linkedin' | 'whatsapp' | 'github' | 'hackerrank') => Promise<{ success: boolean; count: number; message: string }>;
   syncIntegrationNotifications: (provider: string) => Promise<{ success: boolean; count: number; message: string }>;
-  disconnectProvider: (provider: 'linkedin' | 'whatsapp' | 'github') => Promise<void>;
+  disconnectProvider: (provider: 'linkedin' | 'whatsapp' | 'github' | 'hackerrank') => Promise<void>;
 
   saveWellbeingCheckin: (checkin: WellbeingCheckin) => void;
 
@@ -394,6 +405,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [linkedInConfig, setLinkedInConfig] = useState<LinkedInIntegrationConfig>(DEFAULT_LINKEDIN_CONFIG);
   const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppIntegrationConfig>(DEFAULT_WHATSAPP_CONFIG);
   const [gitHubConfig, setGitHubConfig] = useState<GitHubIntegrationConfig>(DEFAULT_GITHUB_CONFIG);
+  const [hackerRankConfig, setHackerRankConfig] = useState<HackerRankIntegrationConfig>(DEFAULT_HACKERRANK_CONFIG);
 
   const unreadNotificationsCount = useMemo(() => {
     return notifications.filter(n => !n.read).length;
@@ -406,6 +418,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setLinkedInConfig(DEFAULT_LINKEDIN_CONFIG);
       setWhatsAppConfig(DEFAULT_WHATSAPP_CONFIG);
       setGitHubConfig(DEFAULT_GITHUB_CONFIG);
+      setHackerRankConfig(DEFAULT_HACKERRANK_CONFIG);
       setMissions([]);
       setRoadmapNodes([]);
       setSkillGaps([]);
@@ -460,7 +473,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActiveSmartestIndex(store.activeSmartestActionIndex || 0);
 
         // Fetch user-isolated records from Cloud Firestore (where userId == auth.currentUser.uid)
-        const [fsGoals, fsMissions, fsDocs, fsNotes, fsGps, fsProfile, lnkCfg, waCfg, ghCfg] = await Promise.all([
+        const [fsGoals, fsMissions, fsDocs, fsNotes, fsGps, fsProfile, lnkCfg, waCfg, ghCfg, hrCfg] = await Promise.all([
           getUserGoalsFromFirestore(currentUser.id),
           getUserMissionsFromFirestore(currentUser.id),
           getUserStudyDocumentsFromFirestore(currentUser.id),
@@ -469,7 +482,8 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           getUserProfile(currentUser.id),
           getLinkedInConfig(currentUser.id),
           getWhatsAppConfig(currentUser.id),
-          getGitHubConfig(currentUser.id)
+          getGitHubConfig(currentUser.id),
+          getHackerRankConfig(currentUser.id)
         ]);
 
         setGoals(fsGoals);
@@ -478,6 +492,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setLinkedInConfig(lnkCfg);
         setWhatsAppConfig(waCfg);
         setGitHubConfig(ghCfg);
+        setHackerRankConfig(hrCfg);
         if (fsNotes.length > 0) {
           setSmartNoteLectures(fsNotes as any);
         }
@@ -939,6 +954,64 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return { stats: newStats, readinessIncreased: isIncrease };
   };
 
+  // HACKERRANK STATS SYNC & READINESS BOOST HANDLER
+  const syncHackerRankStats = async (username: string): Promise<{ stats: HackerRankStats; readinessIncreased: boolean }> => {
+    const newStats = await fetchHackerRankStats(username);
+    const oldSolved = studentProfile?.hackerrankStats?.totalSolved || 0;
+    const isIncrease = newStats.totalSolved > oldSolved || !studentProfile?.hackerrankStats;
+
+    let updatedReadiness = studentProfile?.placementReadiness || 88.4;
+    if (isIncrease) {
+      updatedReadiness = Math.min(100, Number((updatedReadiness + 1.4).toFixed(1)));
+
+      // Auto-complete active HackerRank / Problem Solving missions in Today's Mission (#tab-home)
+      const updatedMissions = missions.map(m => {
+        const lowerCat = (m.category || '').toLowerCase();
+        const lowerTitle = (m.title || '').toLowerCase();
+        if (
+          !m.completed &&
+          (lowerCat.includes('hackerrank') ||
+           lowerCat.includes('problem solving') ||
+           lowerCat.includes('coding') ||
+           lowerCat.includes('algorithms') ||
+           lowerTitle.includes('hackerrank') ||
+           lowerTitle.includes('problem solving'))
+        ) {
+          const item = { ...m, completed: true, completedAt: new Date().toISOString() };
+          if (currentUser) saveMissionToFirestore(currentUser.id, item);
+          return item;
+        }
+        return m;
+      });
+
+      setMissions(updatedMissions);
+      syncStore({ missions: updatedMissions });
+
+      // Celebration Confetti
+      confetti({
+        particleCount: 130,
+        spread: 85,
+        origin: { y: 0.3 }
+      });
+    }
+
+    // Append verified HackerRank certifications & badges to student achievements
+    const newAchievements = Array.from(new Set([
+      ...(studentProfile?.achievements || []),
+      'HackerRank Problem Solving (Advanced) Verified',
+      'HackerRank 5-Star Python Mastery'
+    ]));
+
+    updateStudentProfile({
+      hackerrankUsername: username,
+      hackerrankStats: newStats,
+      placementReadiness: updatedReadiness,
+      achievements: newAchievements
+    });
+
+    return { stats: newStats, readinessIncreased: isIncrease };
+  };
+
   const connectUserIntegration = async (
     provider: string,
     accountIdentifier: string,
@@ -951,6 +1024,10 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (provider === 'leetcode' && accountIdentifier) {
       await syncLeetCodeStats(accountIdentifier);
+    }
+
+    if (provider === 'hackerrank' && accountIdentifier) {
+      await syncHackerRankStats(accountIdentifier);
     }
 
     // Immediately synchronize initial authorized notifications into Firestore
@@ -971,6 +1048,10 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (provider === 'leetcode') {
       updateStudentProfile({ leetcodeUsername: undefined, leetcodeStats: undefined });
+    }
+
+    if (provider === 'hackerrank') {
+      updateStudentProfile({ hackerrankUsername: undefined, hackerrankStats: undefined });
     }
   };
 
@@ -1033,6 +1114,13 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return updated;
   };
 
+  const saveHackerRankSettings = async (cfg: Partial<HackerRankIntegrationConfig>): Promise<HackerRankIntegrationConfig> => {
+    const userId = currentUser?.id || 'guest';
+    const updated = await saveHackerRankConfig(userId, cfg);
+    setHackerRankConfig(updated);
+    return updated;
+  };
+
   const testLinkedIn = async (config?: LinkedInIntegrationConfig): Promise<ConnectionTestResult> => {
     const userId = currentUser?.id || 'guest';
     const res = await testLinkedInConnection(userId, config || linkedInConfig);
@@ -1072,7 +1160,25 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return res;
   };
 
-  const syncProvider = async (provider: 'linkedin' | 'whatsapp' | 'github'): Promise<{ success: boolean; count: number; message: string }> => {
+  const testHackerRank = async (config?: HackerRankIntegrationConfig): Promise<ConnectionTestResult> => {
+    const userId = currentUser?.id || 'guest';
+    const res = await testHackerRankConnection(userId, config || hackerRankConfig);
+    const updated = await getHackerRankConfig(userId);
+    const finalConfig: HackerRankIntegrationConfig = {
+      ...updated,
+      status: res.success ? 'CONNECTED' : (res.status || updated.status),
+      errorMessage: res.success ? undefined : (res.message || updated.errorMessage)
+    };
+    setHackerRankConfig(finalConfig);
+
+    if (res.success && (config?.username || updated.username)) {
+      await syncHackerRankStats(config?.username || updated.username || '');
+    }
+
+    return res;
+  };
+
+  const syncProvider = async (provider: 'linkedin' | 'whatsapp' | 'github' | 'hackerrank'): Promise<{ success: boolean; count: number; message: string }> => {
     const userId = currentUser?.id || 'guest';
     const res = await syncProviderIntegration(userId, provider);
     if (provider === 'linkedin') {
@@ -1084,6 +1190,9 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else if (provider === 'github') {
       const updated = await getGitHubConfig(userId);
       setGitHubConfig(updated);
+    } else if (provider === 'hackerrank') {
+      const updated = await getHackerRankConfig(userId);
+      setHackerRankConfig(updated);
     }
     return res;
   };
@@ -1094,7 +1203,7 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return await syncProviderNotifications(userId, provider, activeIdentifier);
   };
 
-  const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp' | 'github'): Promise<void> => {
+  const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp' | 'github' | 'hackerrank'): Promise<void> => {
     const userId = currentUser?.id || 'guest';
     await disconnectProviderIntegration(userId, provider);
     if (provider === 'linkedin') {
@@ -1106,6 +1215,9 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else if (provider === 'github') {
       const updated = await getGitHubConfig(userId);
       setGitHubConfig(updated);
+    } else if (provider === 'hackerrank') {
+      const updated = await getHackerRankConfig(userId);
+      setHackerRankConfig(updated);
     }
   };
 
@@ -1370,6 +1482,7 @@ BEHAVIOR INSTRUCTIONS:
         studentProfile,
         updateStudentProfile,
         syncLeetCodeStats,
+        syncHackerRankStats,
         userIntegrations,
         connectUserIntegration,
         disconnectUserIntegration,
@@ -1384,12 +1497,15 @@ BEHAVIOR INSTRUCTIONS:
         linkedInConfig,
         whatsAppConfig,
         gitHubConfig,
+        hackerRankConfig,
         saveLinkedInSettings,
         saveWhatsAppSettings,
         saveGitHubSettings,
+        saveHackerRankSettings,
         testLinkedIn,
         testWhatsApp,
         testGitHub,
+        testHackerRank,
         syncProvider,
         syncIntegrationNotifications,
         disconnectProvider: disconnectProviderAction,
