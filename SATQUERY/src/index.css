@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-space-dark: #030712;
+    --color-cyber-cyan: #00F0FF;
+    --color-cyber-blue: #0A84FF;
+  }
+
+  body {
+    background-color: #030712;
+    color: #F3F4F6;
+    background-image: 
+      radial-gradient(ellipse 80% 80% at 50% -20%, rgba(10, 132, 255, 0.15), rgba(255, 255, 255, 0)),
+      radial-gradient(circle at 80% 20%, rgba(0, 240, 255, 0.05), transparent 40%),
+      linear-gradient(to bottom, #030712, #070D1D, #050B14);
+    min-height: 100vh;
+  }
+
+  /* Deep-tech custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #070D1D;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #162C54;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00F0FF;
+  }
+}
+
+/* Subtle grid backdrop */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(0, 240, 255, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Deep-tech Glassmorphism card */
+.glass-panel {
+  background: rgba(11, 21, 43, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-hover {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-panel-hover:hover {
+  border-color: rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5);
+  transform: translateY(-2px);
+}
+
+/* Glowing route connector line */
+.roadmap-line {
+  background: linear-gradient(90deg, #0A84FF, #00F0FF, #30D158);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.roadmap-line-vertical {
+  background: linear-gradient(180deg, #0A84FF, #00F0FF, #30D158);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+/* Scanline animation */
+.scan-line-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00F0FF, transparent);
+  box-shadow: 0 0 8px #00F0FF;
+  animation: scanLine 3s linear infinite;
+}
+
+@keyframes scanLine {
+  0% { transform: translateY(0%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(400px); opacity: 0; }
+}
+
+/* Leaflet dark theme fix */
+.leaflet-container {
+  background: #070D1D !important;
+  font-family: inherit;
+}
+
+.leaflet-bar a {
+  background-color: #0B152B !important;
+  color: #00F0FF !important;
+  border-color: #162C54 !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #162C54 !important;
+  color: #FFFFFF !important;
+}
