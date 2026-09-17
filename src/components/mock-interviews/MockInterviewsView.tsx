@@ -73,7 +73,8 @@ export const MockInterviewsView: React.FC = () => {
     interimText: interimTranscript,
     finalText: finalTranscript,
     startListening: startVoiceRecording,
-    stopListening: stopVoiceRecording
+    stopListening: stopVoiceRecording,
+    cancelListening: cancelVoiceRecording
   } = useVoiceRecognition({
     fieldId: `mock_interview_answer_q${currentQIndex}`,
     initialValue: userAnswer,
@@ -86,7 +87,7 @@ export const MockInterviewsView: React.FC = () => {
   // Toggle Voice Input Recording with Speaker Biometrics Recognition
   const toggleMic = async () => {
     if (isListening) {
-      stopVoiceRecording();
+      await stopVoiceRecording();
     } else {
       setVoiceVerified(true);
       setVoiceConfidence(Math.floor(Math.random() * 4) + 96);
@@ -687,17 +688,28 @@ Return ONLY valid JSON:
                             </span>
                           )}
 
-                          <button
-                            onClick={toggleMic}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
-                              isListening
-                                ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/30'
-                                : 'bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40'
-                            }`}
-                          >
-                            {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                            <span>{isListening ? '⏹ Stop Voice Input' : '🎤 Speak Answer'}</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={toggleMic}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+                                isListening
+                                  ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/30'
+                                  : 'bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40'
+                              }`}
+                            >
+                              {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                              <span>{isListening ? '⏹ Done Speaking' : '🎤 Speak Answer'}</span>
+                            </button>
+                            {isListening && (
+                              <button
+                                onClick={cancelVoiceRecording}
+                                className="px-2.5 py-1.5 rounded-xl text-xs bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 cursor-pointer transition-all"
+                                title="Cancel and discard voice input"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 

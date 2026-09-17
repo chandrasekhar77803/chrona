@@ -2,22 +2,85 @@
  * CENTRALIZED VOICE RECOGNITION SERVICE (SINGLETON ENGINE)
  *
  * Provides a robust, thread-safe Speech Recognition Engine across Chrona.
- * Enforces proper lifecycle: IDLE -> STARTING -> LISTENING -> PROCESSING -> FINALIZED -> IDLE
- * Prevents word/sentence duplication by maintaining strict separation between:
- *  - baseInitialText (text in input box before recording started)
- *  - sessionFinalText (new final text recognized during current session)
- *  - sessionInterimText (temporary active speech hypothesis, never permanently appended until final)
+ * Enforces strict lifecycle: IDLE -> STARTING -> LISTENING -> PROCESSING -> IDLE
+ * Solves:
+ * 1. Word/sentence duplication via chunk deduplication & index tracking
+ * 2. Natural pauses & continuous speech via auto-restart without losing previous text
+ * 3. Safe fallback with Gemini Multimodal Audio Transcriber for university/network firewalls
+ * 4. Distinct Stop vs Cancel semantics
  */
 
 export interface VoiceSessionOptions {
   fieldId: string;
-  lang?: string; // e.g. 'en-US', 'te-IN', 'hi-IN', 'ta-IN', 'kn-IN', 'ml-IN'
+  lang?: string; // e.g. 'en-US', 'te-IN', 'hi-IN', 'ta-IN', 'kn-IN', 'ml-IN', etc.
   initialText?: string;
   onTranscriptChange: (finalText: string, interimText: string) => void;
   onStatusChange?: (status: VoiceStatus, errorMessage?: string) => void;
 }
 
-export type VoiceStatus = 'idle' | 'starting' | 'listening' | 'paused' | 'processing' | 'done' | 'error';
+export type VoiceStatus = 'idle' | 'starting' | 'listening' | 'paused' | 'processing' | 'error';
+
+/**
+ * Cleanly deduplicate overlapping words or phrases between consecutive speech chunks
+ */
+export function deduplicatePhrases(chunks: string[]): string[] {
+  const result: string[] = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = (chunks[i] || '').trim();
+    if (!chunk) continue;
+
+    if (result.length === 0) {
+      result.push(chunk);
+      continue;
+    }
+
+    const prevChunk = result[result.length - 1];
+
+    // If exact duplicate of preceding chunk, skip
+    if (chunk.toLowerCase() === prevChunk.toLowerCase()) {
+      continue;
+    }
+
+    // If the chunk is fully contained at the end of prevChunk, skip
+    if (prevChunk.toLowerCase().endsWith(chunk.toLowerCase())) {
+      continue;
+    }
+
+    // If prevChunk is fully contained at the beginning of chunk, replace prevChunk
+    if (chunk.toLowerCase().startsWith(prevChunk.toLowerCase())) {
+      result[result.length - 1] = chunk;
+      continue;
+    }
+
+    // Word-level suffix/prefix overlap removal
+    const prevWords = prevChunk.split(/\s+/);
+    const currWords = chunk.split(/\s+/);
+
+    let overlapSize = 0;
+    const maxOverlap = Math.min(prevWords.length, currWords.length);
+
+    for (let k = maxOverlap; k > 0; k--) {
+      const prevSuffix = prevWords.slice(-k).join(' ').toLowerCase();
+      const currPrefix = currWords.slice(0, k).join(' ').toLowerCase();
+      if (prevSuffix === currPrefix) {
+        overlapSize = k;
+        break;
+      }
+    }
+
+    if (overlapSize > 0) {
+      const remainingWords = currWords.slice(overlapSize);
+      if (remainingWords.length > 0) {
+        result.push(remainingWords.join(' '));
+      }
+    } else {
+      result.push(chunk);
+    }
+  }
+
+  return result;
+}
 
 /**
  * Transcribe recorded audio blob using Gemini Multimodal Audio API
@@ -56,6 +119,10 @@ async function transcribeAudioWithGemini(
       ? 'Marathi (मराठी)'
       : targetLang.startsWith('bn')
       ? 'Bengali (বাংলা)'
+      : targetLang.startsWith('gu')
+      ? 'Gujarati (ગુજરાતી)'
+      : targetLang.startsWith('pa')
+      ? 'Punjabi (ਪੰਜਾਬੀ)'
       : 'English';
 
     const promptText = `Listen to this user audio recording and transcribe the speech into text accurately in ${langName}.
@@ -90,7 +157,7 @@ Return ONLY the verbatim transcribed text. Do NOT add any markdown formatting, p
       return text;
     }
   } catch (err) {
-    console.warn('[VoiceService] Gemini audio transcription fallback warning:', err);
+    console.warn('[VoiceService] Gemini audio transcription notice:', err);
   }
   return '';
 }
@@ -106,11 +173,14 @@ class VoiceService {
   private status: VoiceStatus = 'idle';
 
   private baseInitialText: string = '';
-  private sessionFinalText: string = '';
+  private accumulatedFinalChunks: string[] = [];
+  private currentSessionFinals: string[] = [];
   private sessionInterimText: string = '';
 
   private currentOptions: VoiceSessionOptions | null = null;
   private useAiFallback: boolean = false;
+  private isExplicitlyStopped: boolean = true;
+  private restartTimeout: any = null;
 
   public isSupported(): boolean {
     if (typeof window === 'undefined') return false;
@@ -139,7 +209,7 @@ class VoiceService {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       return stream;
     } catch (err: any) {
-      console.warn('[VoiceService] Microphone permission check failed:', err);
+      console.warn('[VoiceService] Microphone permission check notice:', err);
       return null;
     }
   }
@@ -159,8 +229,147 @@ class VoiceService {
   }
 
   /**
+   * Emit updated live text to current subscriber
+   */
+  private emitTranscriptUpdate(): void {
+    if (!this.currentOptions) return;
+
+    const allFinals = deduplicatePhrases([...this.accumulatedFinalChunks, ...this.currentSessionFinals]);
+    const finalJoined = allFinals.join(' ').trim();
+
+    let fullCommitted = '';
+    if (this.baseInitialText && finalJoined) {
+      // Avoid duplicate prefix if finalJoined already starts with baseInitialText
+      if (finalJoined.toLowerCase().startsWith(this.baseInitialText.toLowerCase())) {
+        fullCommitted = finalJoined;
+      } else {
+        fullCommitted = `${this.baseInitialText} ${finalJoined}`;
+      }
+    } else {
+      fullCommitted = finalJoined || this.baseInitialText;
+    }
+
+    this.currentOptions.onTranscriptChange(fullCommitted, this.sessionInterimText);
+  }
+
+  /**
+   * Start or restart the underlying WebSpeech SpeechRecognition instance
+   */
+  private startRecognitionEngine(): boolean {
+    if (this.isExplicitlyStopped) return false;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      this.useAiFallback = true;
+      return false;
+    }
+
+    try {
+      if (this.recognition) {
+        try {
+          this.recognition.onstart = null;
+          this.recognition.onresult = null;
+          this.recognition.onerror = null;
+          this.recognition.onend = null;
+          this.recognition.stop();
+        } catch (e) {}
+        this.recognition = null;
+      }
+
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = this.activeLang;
+      rec.maxAlternatives = 1;
+
+      rec.onstart = () => {
+        if (!this.isExplicitlyStopped) {
+          this.status = 'listening';
+          if (this.currentOptions?.onStatusChange) {
+            this.currentOptions.onStatusChange('listening');
+          }
+        }
+      };
+
+      rec.onresult = (event: any) => {
+        const finals: string[] = [];
+        let interim = '';
+
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i];
+          const transcript = (result[0]?.transcript || '').trim();
+
+          if (result.isFinal) {
+            if (transcript) {
+              finals.push(transcript);
+            }
+          } else {
+            if (transcript) {
+              interim = interim ? `${interim} ${transcript}` : transcript;
+            }
+          }
+        }
+
+        this.currentSessionFinals = finals;
+        this.sessionInterimText = interim;
+        this.emitTranscriptUpdate();
+      };
+
+      rec.onerror = (event: any) => {
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          return;
+        }
+
+        if (event.error === 'network') {
+          // If browser speech engine hits network block (e.g. university / firewall), fallback to Gemini AI Transcriber
+          this.useAiFallback = true;
+          return;
+        }
+
+        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          this.status = 'error';
+          this.isExplicitlyStopped = true;
+          if (this.currentOptions?.onStatusChange) {
+            this.currentOptions.onStatusChange(
+              'error',
+              'Microphone access is required for voice input. Please allow microphone access in your browser settings.'
+            );
+          }
+        }
+      };
+
+      rec.onend = () => {
+        // Commit current recognition cycle results into accumulated finals
+        if (this.currentSessionFinals.length > 0) {
+          this.accumulatedFinalChunks.push(...this.currentSessionFinals);
+          this.currentSessionFinals = [];
+        }
+        this.sessionInterimText = '';
+
+        // If user is still actively listening, gracefully auto-restart for continuous speech & pauses
+        if (!this.isExplicitlyStopped && this.status === 'listening') {
+          if (this.restartTimeout) clearTimeout(this.restartTimeout);
+          this.restartTimeout = setTimeout(() => {
+            if (!this.isExplicitlyStopped && this.status === 'listening') {
+              this.startRecognitionEngine();
+            }
+          }, 150);
+        }
+      };
+
+      this.recognition = rec;
+      rec.start();
+      return true;
+    } catch (err: any) {
+      console.warn('[VoiceService] SpeechRecognition start notice:', err);
+      this.useAiFallback = true;
+      return false;
+    }
+  }
+
+  /**
    * Start a new voice recognition session.
-   * Ensures exactly ONE active recognition session is running.
+   * Ensures exactly ONE active recognition session is running at a time.
    */
   public async startSession(options: VoiceSessionOptions): Promise<boolean> {
     if (!this.isSupported()) {
@@ -168,23 +377,30 @@ class VoiceService {
       if (options.onStatusChange) {
         options.onStatusChange(
           'error',
-          'Voice recognition is not supported in this browser. Please use a modern browser (e.g. Chrome, Edge, Firefox) or type your message.'
+          'Voice recognition is not supported in this browser. Please use a supported browser (e.g. Chrome, Edge) or type your message.'
         );
       }
       return false;
     }
 
-    // Stop any existing session cleanly
+    // Cancel any previous running session cleanly
     await this.stopSession(false);
+
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+    }
 
     this.currentOptions = options;
     this.activeFieldId = options.fieldId;
     this.activeLang = options.lang || 'en-US';
     this.baseInitialText = (options.initialText || '').trim();
-    this.sessionFinalText = '';
+    this.accumulatedFinalChunks = [];
+    this.currentSessionFinals = [];
     this.sessionInterimText = '';
     this.useAiFallback = false;
     this.recordedChunks = [];
+    this.isExplicitlyStopped = false;
 
     this.status = 'starting';
     if (this.currentOptions?.onStatusChange) {
@@ -195,10 +411,11 @@ class VoiceService {
     const stream = await this.requestMicrophonePermission();
     if (!stream) {
       this.status = 'error';
+      this.isExplicitlyStopped = true;
       if (this.currentOptions?.onStatusChange) {
         this.currentOptions.onStatusChange(
           'error',
-          'Microphone access is blocked. Please click the camera/mic icon in your browser URL bar to allow microphone access and try again.'
+          'Microphone access is required for voice input. Please allow microphone access in your browser settings.'
         );
       }
       return false;
@@ -221,103 +438,14 @@ class VoiceService {
             this.recordedChunks.push(e.data);
           }
         };
-        recorder.start(250); // Collect in 250ms chunks
+        recorder.start(250);
         this.mediaRecorder = recorder;
       }
     } catch (recorderErr) {
       console.warn('[VoiceService] MediaRecorder initialization notice:', recorderErr);
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      try {
-        const rec = new SpeechRecognition();
-        rec.continuous = true;
-        rec.interimResults = true;
-        rec.lang = this.activeLang;
-        rec.maxAlternatives = 1;
-
-        rec.onstart = () => {
-          this.status = 'listening';
-          if (this.currentOptions?.onStatusChange) {
-            this.currentOptions.onStatusChange('listening');
-          }
-        };
-
-        rec.onresult = (event: any) => {
-          let finalTranscriptsArray: string[] = [];
-          let currentInterim = '';
-
-          for (let i = 0; i < event.results.length; i++) {
-            const result = event.results[i];
-            const transcript = (result[0]?.transcript || '').trim();
-
-            if (result.isFinal) {
-              if (transcript) {
-                finalTranscriptsArray.push(transcript);
-              }
-            } else {
-              if (transcript) {
-                currentInterim = currentInterim ? `${currentInterim} ${transcript}` : transcript;
-              }
-            }
-          }
-
-          if (finalTranscriptsArray.length > 0) {
-            this.sessionFinalText = finalTranscriptsArray.join(' ');
-          }
-          this.sessionInterimText = currentInterim;
-
-          const fullCommitted = this.baseInitialText
-            ? (this.sessionFinalText ? `${this.baseInitialText} ${this.sessionFinalText}` : this.baseInitialText)
-            : this.sessionFinalText;
-
-          if (this.currentOptions) {
-            this.currentOptions.onTranscriptChange(fullCommitted, this.sessionInterimText);
-          }
-        };
-
-        rec.onerror = (event: any) => {
-          console.warn(`[VoiceService] WebSpeech notice on field "${this.activeFieldId}":`, event.error);
-
-          if (event.error === 'no-speech' || event.error === 'aborted') {
-            return;
-          }
-
-          // If browser speech engine hits network block (e.g. Google speech server blocked on university/company Wi-Fi)
-          if (event.error === 'network') {
-            console.log('[VoiceService] Switching to Chrona AI Audio Transcriber for network resilience.');
-            this.useAiFallback = true;
-            // Keep status listening so user can speak naturally and have it transcribed by Gemini upon stop
-            if (this.currentOptions?.onStatusChange) {
-              this.currentOptions.onStatusChange('listening');
-            }
-            return;
-          }
-
-          if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-            this.status = 'error';
-            if (this.currentOptions?.onStatusChange) {
-              this.currentOptions.onStatusChange('error', 'Microphone access is blocked. Please allow microphone access in your browser settings.');
-            }
-          }
-        };
-
-        rec.onend = () => {
-          // Handled in stopSession
-        };
-
-        this.recognition = rec;
-        rec.start();
-        return true;
-      } catch (err: any) {
-        console.warn('[VoiceService] WebSpeech start error, using AI Audio Transcriber:', err);
-        this.useAiFallback = true;
-      }
-    } else {
-      this.useAiFallback = true;
-    }
+    this.startRecognitionEngine();
 
     this.status = 'listening';
     if (this.currentOptions?.onStatusChange) {
@@ -327,9 +455,17 @@ class VoiceService {
   }
 
   /**
-   * Stop active session cleanly and finalize transcript (with Gemini AI Transcriber if needed)
+   * Stop active session cleanly and finalize transcript.
+   * If finalize === true: commits final speech text.
+   * If finalize === false: cancels and discards current speech session.
    */
   public async stopSession(finalize: boolean = true): Promise<void> {
+    this.isExplicitlyStopped = true;
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+    }
+
     // Stop WebSpeech Recognition
     if (this.recognition) {
       try {
@@ -338,9 +474,7 @@ class VoiceService {
         this.recognition.onerror = null;
         this.recognition.onend = null;
         this.recognition.stop();
-      } catch (e) {
-        // Ignore stop error
-      }
+      } catch (e) {}
       this.recognition = null;
     }
 
@@ -353,9 +487,7 @@ class VoiceService {
           this.mediaRecorder.onstop = () => resolve();
           this.mediaRecorder.stop();
         });
-      } catch (e) {
-        // Ignore recorder stop error
-      }
+      } catch (e) {}
 
       if (this.recordedChunks.length > 0) {
         audioBlob = new Blob(this.recordedChunks, { type: this.recordedChunks[0]?.type || 'audio/webm' });
@@ -365,16 +497,32 @@ class VoiceService {
     this.releaseMicrophoneStream();
 
     if (!finalize) {
+      // CANCEL: Discard current session recordings, restore base initial text
       this.status = 'idle';
+      this.accumulatedFinalChunks = [];
+      this.currentSessionFinals = [];
       this.sessionInterimText = '';
-      if (this.currentOptions?.onStatusChange) {
-        this.currentOptions.onStatusChange('idle');
+      this.recordedChunks = [];
+      if (this.currentOptions) {
+        this.currentOptions.onTranscriptChange(this.baseInitialText, '');
+        if (this.currentOptions.onStatusChange) {
+          this.currentOptions.onStatusChange('idle');
+        }
       }
       return;
     }
 
-    // If WebSpeech did not produce final text or AI fallback was engaged, transcribe with Gemini AI
-    if ((!this.sessionFinalText || this.useAiFallback) && audioBlob && audioBlob.size > 500) {
+    // Finalize speech
+    if (this.currentSessionFinals.length > 0) {
+      this.accumulatedFinalChunks.push(...this.currentSessionFinals);
+      this.currentSessionFinals = [];
+    }
+
+    const allFinals = deduplicatePhrases(this.accumulatedFinalChunks);
+    let sessionFinalJoined = allFinals.join(' ').trim();
+
+    // Fallback: If WebSpeech produced no text or AI fallback was activated
+    if ((!sessionFinalJoined || this.useAiFallback) && audioBlob && audioBlob.size > 500) {
       this.status = 'processing';
       if (this.currentOptions?.onStatusChange) {
         this.currentOptions.onStatusChange('processing');
@@ -382,16 +530,23 @@ class VoiceService {
 
       const aiTranscript = await transcribeAudioWithGemini(audioBlob, this.activeLang);
       if (aiTranscript) {
-        this.sessionFinalText = aiTranscript;
+        sessionFinalJoined = aiTranscript;
       }
     }
 
     this.status = 'idle';
     this.sessionInterimText = '';
 
-    const fullCommitted = this.baseInitialText
-      ? (this.sessionFinalText ? `${this.baseInitialText} ${this.sessionFinalText}` : this.baseInitialText)
-      : this.sessionFinalText;
+    let fullCommitted = '';
+    if (this.baseInitialText && sessionFinalJoined) {
+      if (sessionFinalJoined.toLowerCase().startsWith(this.baseInitialText.toLowerCase())) {
+        fullCommitted = sessionFinalJoined;
+      } else {
+        fullCommitted = `${this.baseInitialText} ${sessionFinalJoined}`;
+      }
+    } else {
+      fullCommitted = sessionFinalJoined || this.baseInitialText;
+    }
 
     if (this.currentOptions) {
       this.currentOptions.onTranscriptChange(fullCommitted, '');
@@ -399,6 +554,13 @@ class VoiceService {
         this.currentOptions.onStatusChange('idle');
       }
     }
+  }
+
+  /**
+   * Cancel and discard the current session without saving speech
+   */
+  public async cancelSession(): Promise<void> {
+    await this.stopSession(false);
   }
 
   public pauseSession(): void {
@@ -420,23 +582,23 @@ class VoiceService {
   }
 
   public clearSession(): void {
-    this.sessionFinalText = '';
+    this.accumulatedFinalChunks = [];
+    this.currentSessionFinals = [];
     this.sessionInterimText = '';
     this.recordedChunks = [];
+    this.baseInitialText = '';
     if (this.currentOptions) {
       this.currentOptions.onTranscriptChange('', '');
     }
   }
 
-  /**
-   * Reset engine completely
-   */
   public reset(): void {
     this.stopSession(false);
     this.activeFieldId = null;
     this.currentOptions = null;
     this.baseInitialText = '';
-    this.sessionFinalText = '';
+    this.accumulatedFinalChunks = [];
+    this.currentSessionFinals = [];
     this.sessionInterimText = '';
     this.recordedChunks = [];
     this.status = 'idle';
@@ -445,5 +607,3 @@ class VoiceService {
 
 // Global Singleton Instance
 export const voiceService = new VoiceService();
-
-

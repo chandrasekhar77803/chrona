@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, Square, AlertCircle, Send, Loader2 } from 'lucide-react';
+import { Mic, Square, AlertCircle, Send, Loader2, X } from 'lucide-react';
 import { useVoiceRecognition } from '../../hooks/useVoiceRecognition';
 
 interface VoiceInputFieldProps {
@@ -45,6 +45,7 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
     setSpeechLang,
     startListening,
     stopListening,
+    cancelListening,
     isSupported
   } = useVoiceRecognition({
     fieldId: fieldIdentifier,
@@ -148,15 +149,25 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
 
           {/* MICROPHONE BUTTON (🎤 / ⏹ / ⏳) */}
           {isListening ? (
-            <button
-              type="button"
-              onClick={stopListening}
-              className="p-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white cursor-pointer shadow-lg shadow-rose-600/30 transition-all flex items-center gap-1 text-[11px] font-mono font-bold animate-pulse"
-              title="Stop listening"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Stop</span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={stopListening}
+                className="p-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white cursor-pointer shadow-lg shadow-rose-600/30 transition-all flex items-center gap-1 text-[11px] font-mono font-bold animate-pulse"
+                title="Finish speaking (Commit text)"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+                <span className="hidden sm:inline">Done</span>
+              </button>
+              <button
+                type="button"
+                onClick={cancelListening}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer border border-slate-700 transition-all"
+                title="Cancel voice input (Discard)"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           ) : (isStarting || isProcessing) ? (
             <button
               type="button"
@@ -213,13 +224,22 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
                 <span className="text-slate-400 font-normal">Speak naturally in {speechLang}</span>
               </span>
             </div>
-            <button
-              type="button"
-              onClick={stopListening}
-              className="text-rose-400 hover:text-rose-300 underline cursor-pointer text-[10px]"
-            >
-              Finish speaking
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={stopListening}
+                className="text-indigo-300 hover:text-white underline cursor-pointer text-[10px]"
+              >
+                Done Speaking
+              </button>
+              <button
+                type="button"
+                onClick={cancelListening}
+                className="text-rose-400 hover:text-rose-300 underline cursor-pointer text-[10px]"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
 
           {/* TEMPORARY REAL-TIME LIVE INTERIM PREVIEW */}
@@ -230,7 +250,7 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
             </div>
           ) : (
             <div className="text-[11px] text-slate-400 italic">
-              Listening for your voice input... (Speak now)
+              Listening for your voice input... (Speak naturally with pauses)
             </div>
           )}
         </div>
@@ -246,4 +266,3 @@ export const VoiceInputField: React.FC<VoiceInputFieldProps> = ({
     </div>
   );
 };
-

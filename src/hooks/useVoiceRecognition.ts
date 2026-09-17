@@ -7,6 +7,7 @@ export interface UseVoiceRecognitionProps {
   lang?: string;
   onFinalTranscript?: (finalTranscript: string) => void;
   onInterimTranscript?: (interimTranscript: string) => void;
+  onLiveTranscript?: (liveTranscript: string) => void;
 }
 
 export function useVoiceRecognition({
@@ -14,7 +15,8 @@ export function useVoiceRecognition({
   initialValue = '',
   lang = 'en-US',
   onFinalTranscript,
-  onInterimTranscript
+  onInterimTranscript,
+  onLiveTranscript
 }: UseVoiceRecognitionProps) {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [finalText, setFinalText] = useState<string>(initialValue);
@@ -24,6 +26,7 @@ export function useVoiceRecognition({
 
   const onFinalCallbackRef = useRef(onFinalTranscript);
   const onInterimCallbackRef = useRef(onInterimTranscript);
+  const onLiveCallbackRef = useRef(onLiveTranscript);
 
   useEffect(() => {
     onFinalCallbackRef.current = onFinalTranscript;
@@ -32,6 +35,10 @@ export function useVoiceRecognition({
   useEffect(() => {
     onInterimCallbackRef.current = onInterimTranscript;
   }, [onInterimTranscript]);
+
+  useEffect(() => {
+    onLiveCallbackRef.current = onLiveTranscript;
+  }, [onLiveTranscript]);
 
   useEffect(() => {
     setSpeechLang(lang);
@@ -53,7 +60,7 @@ export function useVoiceRecognition({
     };
   }, [fieldId]);
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(async (): Promise<boolean> => {
     setErrorMessage(null);
     setInterimText('');
 
@@ -65,14 +72,16 @@ export function useVoiceRecognition({
         setFinalText(newFinal);
         setInterimText(newInterim);
 
-        // Compute combined live speech text
         const liveText = newInterim
           ? (newFinal ? `${newFinal} ${newInterim}` : newInterim)
           : newFinal;
 
-        // Immediately update input typebar in real time as the user speaks
-        if (onFinalCallbackRef.current && liveText) {
+        // Feed live transcript to callbacks
+        if (onFinalCallbackRef.current) {
           onFinalCallbackRef.current(liveText);
+        }
+        if (onLiveCallbackRef.current) {
+          onLiveCallbackRef.current(liveText);
         }
         if (onInterimCallbackRef.current) {
           onInterimCallbackRef.current(newInterim);
@@ -82,23 +91,37 @@ export function useVoiceRecognition({
         setStatus(newStatus);
         if (err) {
           setErrorMessage(err);
-          setTimeout(() => setErrorMessage(null), 6000);
+          setTimeout(() => setErrorMessage(null), 7000);
         }
       }
     });
 
     if (!success) {
       setStatus('error');
+      return false;
     }
+    return true;
   }, [fieldId, speechLang, finalText, initialValue]);
 
-  const stopListening = useCallback(() => {
+  const stopListening = useCallback(async () => {
     if (voiceService.getActiveFieldId() === fieldId) {
-      voiceService.stopSession(true);
+      await voiceService.stopSession(true);
     }
     setStatus('idle');
     setInterimText('');
   }, [fieldId]);
+
+  const cancelListening = useCallback(async () => {
+    if (voiceService.getActiveFieldId() === fieldId) {
+      await voiceService.stopSession(false);
+    }
+    setStatus('idle');
+    setInterimText('');
+    setFinalText(initialValue);
+    if (onFinalCallbackRef.current) {
+      onFinalCallbackRef.current(initialValue);
+    }
+  }, [fieldId, initialValue]);
 
   const togglePause = useCallback(() => {
     if (status === 'listening') {
@@ -132,9 +155,9 @@ export function useVoiceRecognition({
     setSpeechLang,
     startListening,
     stopListening,
+    cancelListening,
     togglePause,
     clearTranscript,
     isSupported: voiceService.isSupported()
   };
 }
-

@@ -3,6 +3,8 @@ import { Clock, Battery, AlertCircle, Calendar, Sparkles, CheckCircle2, ChevronR
 import { useChrona } from '../../context/ChronaContext';
 import { useAuth } from '../../context/AuthContext';
 import { syncDailyPlannerToFirestore } from '../../services/firebaseService';
+import { VoiceInputField } from '../common/VoiceInputField';
+import { parseSpokenTimeSlot } from '../../utils/timeSlotParser';
 
 interface Props {
   isOpen: boolean;
@@ -234,26 +236,41 @@ Return ONLY valid JSON array with 6-8 timetable slots:
                   ))}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-2">
-                  <input
-                    type="text"
-                    placeholder="Commitment Name"
+                <div className="pt-1">
+                  <VoiceInputField
+                    placeholder="Speak or type (e.g. Gym from 6 PM to 7:30 PM)..."
                     value={newCommitmentName}
-                    onChange={e => setNewCommitmentName(e.target.value)}
-                    className="col-span-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white"
+                    onChange={(val) => {
+                      setNewCommitmentName(val);
+                      const parsed = parseSpokenTimeSlot(val);
+                      if (parsed.hasTimeInfo) {
+                        if (parsed.title) setNewCommitmentName(parsed.title);
+                        if (parsed.startTime) setNewStartTime(parsed.startTime);
+                        if (parsed.endTime) setNewEndTime(parsed.endTime);
+                      }
+                    }}
                   />
-                  <input
-                    type="time"
-                    value={newStartTime}
-                    onChange={e => setNewStartTime(e.target.value)}
-                    className="px-2 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white font-mono"
-                  />
-                  <input
-                    type="time"
-                    value={newEndTime}
-                    onChange={e => setNewEndTime(e.target.value)}
-                    className="px-2 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white font-mono"
-                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-mono block mb-0.5">Start Time</label>
+                    <input
+                      type="time"
+                      value={newStartTime}
+                      onChange={e => setNewStartTime(e.target.value)}
+                      className="w-full px-2 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-mono block mb-0.5">End Time</label>
+                    <input
+                      type="time"
+                      value={newEndTime}
+                      onChange={e => setNewEndTime(e.target.value)}
+                      className="w-full px-2 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white font-mono"
+                    />
+                  </div>
                 </div>
                 <button
                   onClick={addCommitment}

@@ -10,6 +10,7 @@ import {
   type FirestoreCalendarEvent
 } from '../../services/firebaseService';
 import { VoiceInputField } from '../common/VoiceInputField';
+import { parseSpokenTimeSlot } from '../../utils/timeSlotParser';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -696,7 +697,14 @@ export const CalendarView: React.FC = () => {
                   label="Task Title *"
                   placeholder="Type or speak (e.g. Add DSA practice tomorrow at 7 PM)..."
                   value={newEventTitle}
-                  onChange={setNewEventTitle}
+                  onChange={(val) => {
+                    setNewEventTitle(val);
+                    const parsed = parseSpokenTimeSlot(val);
+                    if (parsed.hasTimeInfo) {
+                      if (parsed.dueTime) setNewEventDueTime(parsed.dueTime);
+                      if (parsed.durationMinutes) setNewEventMinutes(parsed.durationMinutes);
+                    }
+                  }}
                 />
               </div>
 

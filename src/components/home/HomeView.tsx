@@ -4,6 +4,7 @@ import { StatCardModals } from './StatCardModals';
 import { PlanMyDayModal } from './PlanMyDayModal';
 import { ChronaMentorCard } from './ChronaMentorCard';
 import { VoiceInputField } from '../common/VoiceInputField';
+import { parseSpokenTimeSlot } from '../../utils/timeSlotParser';
 import {
   CheckCircle2,
   Circle,
@@ -420,9 +421,15 @@ export const HomeView: React.FC = () => {
               <div className="space-y-1">
                 <VoiceInputField
                   label="Task Title"
-                  placeholder="Type or speak (e.g. Solve 5 LeetCode Array Questions)..."
+                  placeholder="Type or speak (e.g. Solve 5 LeetCode Array Questions for 45 minutes)..."
                   value={customTitle}
-                  onChange={setCustomTitle}
+                  onChange={(val) => {
+                    setCustomTitle(val);
+                    const parsed = parseSpokenTimeSlot(val);
+                    if (parsed.hasTimeInfo && parsed.durationMinutes) {
+                      setCustomMinutes(parsed.durationMinutes);
+                    }
+                  }}
                 />
               </div>
 
