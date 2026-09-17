@@ -1037,7 +1037,12 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const userId = currentUser?.id || 'guest';
     const res = await testLinkedInConnection(userId, config || linkedInConfig);
     const updated = await getLinkedInConfig(userId);
-    setLinkedInConfig(updated);
+    const finalConfig: LinkedInIntegrationConfig = {
+      ...updated,
+      status: res.success ? 'CONNECTED' : (res.status || updated.status),
+      errorMessage: res.success ? undefined : (res.message || updated.errorMessage)
+    };
+    setLinkedInConfig(finalConfig);
     return res;
   };
 
@@ -1045,7 +1050,12 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const userId = currentUser?.id || 'guest';
     const res = await testWhatsAppConnection(userId, config || whatsAppConfig);
     const updated = await getWhatsAppConfig(userId);
-    setWhatsAppConfig(updated);
+    const finalConfig: WhatsAppIntegrationConfig = {
+      ...updated,
+      status: res.success ? 'CONNECTED' : (res.status || updated.status),
+      errorMessage: res.success ? undefined : (res.message || updated.errorMessage)
+    };
+    setWhatsAppConfig(finalConfig);
     return res;
   };
 
@@ -1053,43 +1063,48 @@ export const ChronaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const userId = currentUser?.id || 'guest';
     const res = await testGitHubConnection(userId, config || gitHubConfig);
     const updated = await getGitHubConfig(userId);
-    setGitHubConfig(updated);
+    const finalConfig: GitHubIntegrationConfig = {
+      ...updated,
+      status: res.success ? 'CONNECTED' : (res.status || updated.status),
+      errorMessage: res.success ? undefined : (res.message || updated.errorMessage)
+    };
+    setGitHubConfig(finalConfig);
     return res;
   };
 
   const syncProvider = async (provider: 'linkedin' | 'whatsapp' | 'github'): Promise<{ success: boolean; count: number; message: string }> => {
-    if (!currentUser) return { success: false, count: 0, message: 'User not logged in' };
-    const res = await syncProviderIntegration(currentUser.id, provider);
+    const userId = currentUser?.id || 'guest';
+    const res = await syncProviderIntegration(userId, provider);
     if (provider === 'linkedin') {
-      const updated = await getLinkedInConfig(currentUser.id);
+      const updated = await getLinkedInConfig(userId);
       setLinkedInConfig(updated);
     } else if (provider === 'whatsapp') {
-      const updated = await getWhatsAppConfig(currentUser.id);
+      const updated = await getWhatsAppConfig(userId);
       setWhatsAppConfig(updated);
     } else if (provider === 'github') {
-      const updated = await getGitHubConfig(currentUser.id);
+      const updated = await getGitHubConfig(userId);
       setGitHubConfig(updated);
     }
     return res;
   };
 
   const syncIntegrationNotifications = async (provider: string): Promise<{ success: boolean; count: number; message: string }> => {
-    if (!currentUser) return { success: false, count: 0, message: 'User not logged in' };
+    const userId = currentUser?.id || 'guest';
     const activeIdentifier = userIntegrations[provider]?.accountIdentifier;
-    return await syncProviderNotifications(currentUser.id, provider, activeIdentifier);
+    return await syncProviderNotifications(userId, provider, activeIdentifier);
   };
 
   const disconnectProviderAction = async (provider: 'linkedin' | 'whatsapp' | 'github'): Promise<void> => {
-    if (!currentUser) return;
-    await disconnectProviderIntegration(currentUser.id, provider);
+    const userId = currentUser?.id || 'guest';
+    await disconnectProviderIntegration(userId, provider);
     if (provider === 'linkedin') {
-      const updated = await getLinkedInConfig(currentUser.id);
+      const updated = await getLinkedInConfig(userId);
       setLinkedInConfig(updated);
     } else if (provider === 'whatsapp') {
-      const updated = await getWhatsAppConfig(currentUser.id);
+      const updated = await getWhatsAppConfig(userId);
       setWhatsAppConfig(updated);
     } else if (provider === 'github') {
-      const updated = await getGitHubConfig(currentUser.id);
+      const updated = await getGitHubConfig(userId);
       setGitHubConfig(updated);
     }
   };

@@ -56,6 +56,7 @@ export const ChronaConnectView: React.FC = () => {
     testLinkedIn,
     testWhatsApp,
     testGitHub,
+    disconnectProvider,
     markNotificationAsRead,
     syncIntegrationNotifications
   } = useChrona();
@@ -493,6 +494,9 @@ export const ChronaConnectView: React.FC = () => {
 
       if (result.success) {
         setGhFeedback({ type: 'success', text: `✅ ${result.message}` });
+        if (result.details?.login) {
+          setGhUsername(result.details.login);
+        }
       } else {
         setGhFeedback({ type: 'error', text: `❌ ${result.message}` });
       }
@@ -508,11 +512,8 @@ export const ChronaConnectView: React.FC = () => {
   };
 
   const handleDisconnectGitHub = async () => {
-    await saveGitHubSettings({
-      status: 'DISCONNECTED',
-      personalAccessToken: '',
-      errorMessage: undefined
-    });
+    await disconnectProvider('github');
+    setGhToken('');
     setGhFeedback({ type: 'info', text: 'GitHub integration disconnected.' });
   };
 

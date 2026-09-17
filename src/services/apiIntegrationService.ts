@@ -85,12 +85,24 @@ export function maskSecret(secret?: string): string {
 // ==========================================
 
 export async function getLinkedInConfig(userId: string): Promise<LinkedInIntegrationConfig> {
-  if (!userId) return { ...DEFAULT_LINKEDIN_CONFIG };
+  const uid = userId || 'guest';
   try {
-    const ref = doc(db, 'users', userId, 'integrationConfigs', 'linkedin');
+    const cached = localStorage.getItem(`chrona_li_config_${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed) return { ...DEFAULT_LINKEDIN_CONFIG, ...parsed };
+    }
+  } catch {}
+
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'linkedin');
     const snap = await getDoc(ref);
     if (snap.exists()) {
-      return { ...DEFAULT_LINKEDIN_CONFIG, ...snap.data() } as LinkedInIntegrationConfig;
+      const config = { ...DEFAULT_LINKEDIN_CONFIG, ...snap.data() } as LinkedInIntegrationConfig;
+      try {
+        localStorage.setItem(`chrona_li_config_${uid}`, JSON.stringify(config));
+      } catch {}
+      return config;
     }
   } catch (err) {
     console.warn('[API Integration] Error loading LinkedIn config:', err);
@@ -102,43 +114,66 @@ export async function saveLinkedInConfig(
   userId: string,
   config: Partial<LinkedInIntegrationConfig>
 ): Promise<LinkedInIntegrationConfig> {
-  if (!userId) throw new Error('User ID required');
-  
-  const current = await getLinkedInConfig(userId);
-  const isFilled = Boolean(config.clientId?.trim() && config.clientSecret?.trim());
+  const uid = userId || 'guest';
+  const current = await getLinkedInConfig(uid);
+  const clientId = config.clientId !== undefined ? config.clientId : current.clientId;
+  const clientSecret = config.clientSecret !== undefined ? config.clientSecret : current.clientSecret;
+  const isFilled = Boolean(clientId?.trim() && clientSecret?.trim());
   const newStatus: IntegrationStatus = config.status || (isFilled ? 'CONFIGURED' : 'NOT_CONFIGURED');
 
   const updated: LinkedInIntegrationConfig = {
     ...current,
     ...config,
+    clientId,
+    clientSecret,
     status: newStatus,
     errorMessage: config.errorMessage || undefined
   };
 
-  const ref = doc(db, 'users', userId, 'integrationConfigs', 'linkedin');
-  await setDoc(ref, updated, { merge: true });
+  try {
+    localStorage.setItem(`chrona_li_config_${uid}`, JSON.stringify(updated));
+  } catch {}
 
-  // Update public integration metadata
-  const integrationRef = doc(db, 'users', userId, 'integrations', 'linkedin');
-  await setDoc(integrationRef, {
-    provider: 'linkedin',
-    status: newStatus,
-    accountIdentifier: config.clientId ? `app_${config.clientId.slice(0, 6)}` : '',
-    scopes: updated.scopes || [],
-    hasCredentials: isFilled,
-    updatedAt: new Date().toISOString()
-  }, { merge: true });
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'linkedin');
+    await setDoc(ref, updated, { merge: true });
+
+    // Update public integration metadata
+    const integrationRef = doc(db, 'users', uid, 'integrations', 'linkedin');
+    await setDoc(integrationRef, {
+      provider: 'linkedin',
+      status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
+      accountIdentifier: updated.clientId ? `app_${updated.clientId.slice(0, 6)}` : '',
+      scopes: updated.scopes || [],
+      hasCredentials: isFilled,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[API Integration] Error persisting LinkedIn config in Firestore:', err);
+  }
 
   return updated;
 }
 
 export async function getWhatsAppConfig(userId: string): Promise<WhatsAppIntegrationConfig> {
-  if (!userId) return { ...DEFAULT_WHATSAPP_CONFIG };
+  const uid = userId || 'guest';
   try {
-    const ref = doc(db, 'users', userId, 'integrationConfigs', 'whatsapp');
+    const cached = localStorage.getItem(`chrona_wa_config_${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed) return { ...DEFAULT_WHATSAPP_CONFIG, ...parsed };
+    }
+  } catch {}
+
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'whatsapp');
     const snap = await getDoc(ref);
     if (snap.exists()) {
-      return { ...DEFAULT_WHATSAPP_CONFIG, ...snap.data() } as WhatsAppIntegrationConfig;
+      const config = { ...DEFAULT_WHATSAPP_CONFIG, ...snap.data() } as WhatsAppIntegrationConfig;
+      try {
+        localStorage.setItem(`chrona_wa_config_${uid}`, JSON.stringify(config));
+      } catch {}
+      return config;
     }
   } catch (err) {
     console.warn('[API Integration] Error loading WhatsApp config:', err);
@@ -150,43 +185,68 @@ export async function saveWhatsAppConfig(
   userId: string,
   config: Partial<WhatsAppIntegrationConfig>
 ): Promise<WhatsAppIntegrationConfig> {
-  if (!userId) throw new Error('User ID required');
-
-  const current = await getWhatsAppConfig(userId);
-  const isFilled = Boolean(config.phoneNumberId?.trim() && (config.accessToken?.trim() || config.appSecret?.trim()));
+  const uid = userId || 'guest';
+  const current = await getWhatsAppConfig(uid);
+  const phoneNumberId = config.phoneNumberId !== undefined ? config.phoneNumberId : current.phoneNumberId;
+  const accessToken = config.accessToken !== undefined ? config.accessToken : current.accessToken;
+  const appSecret = config.appSecret !== undefined ? config.appSecret : current.appSecret;
+  const isFilled = Boolean(phoneNumberId?.trim() && (accessToken?.trim() || appSecret?.trim()));
   const newStatus: IntegrationStatus = config.status || (isFilled ? 'CONFIGURED' : 'NOT_CONFIGURED');
 
   const updated: WhatsAppIntegrationConfig = {
     ...current,
     ...config,
+    phoneNumberId,
+    accessToken,
+    appSecret,
     status: newStatus,
     errorMessage: config.errorMessage || undefined
   };
 
-  const ref = doc(db, 'users', userId, 'integrationConfigs', 'whatsapp');
-  await setDoc(ref, updated, { merge: true });
+  try {
+    localStorage.setItem(`chrona_wa_config_${uid}`, JSON.stringify(updated));
+  } catch {}
 
-  // Update public integration metadata
-  const integrationRef = doc(db, 'users', userId, 'integrations', 'whatsapp');
-  await setDoc(integrationRef, {
-    provider: 'whatsapp',
-    status: newStatus,
-    accountIdentifier: config.phoneNumberId ? `phone_${config.phoneNumberId}` : '',
-    scopes: ['messages', 'whatsapp_business_messaging'],
-    hasCredentials: isFilled,
-    updatedAt: new Date().toISOString()
-  }, { merge: true });
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'whatsapp');
+    await setDoc(ref, updated, { merge: true });
+
+    // Update public integration metadata
+    const integrationRef = doc(db, 'users', uid, 'integrations', 'whatsapp');
+    await setDoc(integrationRef, {
+      provider: 'whatsapp',
+      status: newStatus === 'CONNECTED' ? 'connected' : newStatus,
+      accountIdentifier: updated.phoneNumberId ? `phone_${updated.phoneNumberId}` : '',
+      scopes: ['messages', 'whatsapp_business_messaging'],
+      hasCredentials: isFilled,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[API Integration] Error persisting WhatsApp config in Firestore:', err);
+  }
 
   return updated;
 }
 
 export async function getGitHubConfig(userId: string): Promise<GitHubIntegrationConfig> {
-  if (!userId) return { ...DEFAULT_GITHUB_CONFIG };
+  const uid = userId || 'guest';
   try {
-    const ref = doc(db, 'users', userId, 'integrationConfigs', 'github');
+    const cached = localStorage.getItem(`chrona_gh_config_${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed) return { ...DEFAULT_GITHUB_CONFIG, ...parsed };
+    }
+  } catch {}
+
+  try {
+    const ref = doc(db, 'users', uid, 'integrationConfigs', 'github');
     const snap = await getDoc(ref);
     if (snap.exists()) {
-      return { ...DEFAULT_GITHUB_CONFIG, ...snap.data() } as GitHubIntegrationConfig;
+      const config = { ...DEFAULT_GITHUB_CONFIG, ...snap.data() } as GitHubIntegrationConfig;
+      try {
+        localStorage.setItem(`chrona_gh_config_${uid}`, JSON.stringify(config));
+      } catch {}
+      return config;
     }
   } catch (err) {
     console.warn('[API Integration] Error loading GitHub config:', err);
@@ -200,15 +260,23 @@ export async function saveGitHubConfig(
 ): Promise<GitHubIntegrationConfig> {
   const uid = userId || 'guest';
   const current = await getGitHubConfig(uid);
-  const isFilled = Boolean(config.personalAccessToken?.trim() || config.username?.trim());
+  const pat = config.personalAccessToken !== undefined ? config.personalAccessToken : current.personalAccessToken;
+  const username = config.username !== undefined ? config.username : current.username;
+  const isFilled = Boolean(pat?.trim() || username?.trim());
   const newStatus: IntegrationStatus = config.status || (isFilled ? 'CONFIGURED' : 'NOT_CONFIGURED');
 
   const updated: GitHubIntegrationConfig = {
     ...current,
     ...config,
+    personalAccessToken: pat,
+    username: username,
     status: newStatus,
     errorMessage: config.errorMessage || undefined
   };
+
+  try {
+    localStorage.setItem(`chrona_gh_config_${uid}`, JSON.stringify(updated));
+  } catch {}
 
   try {
     const ref = doc(db, 'users', uid, 'integrationConfigs', 'github');
@@ -284,7 +352,11 @@ export async function testLinkedInConnection(
           errorMessage: undefined
         };
         await saveLinkedInConfig(userId, successConfig);
-        await syncProviderNotifications(userId, 'linkedin');
+        try {
+          await syncProviderNotifications(userId, 'linkedin');
+        } catch (syncErr) {
+          console.warn('[API Integration] Notification sync warning for LinkedIn:', syncErr);
+        }
         return {
           success: true,
           status: 'CONNECTED',
@@ -331,7 +403,11 @@ export async function testLinkedInConnection(
         errorMessage: undefined,
         accessToken: data.access_token || activeConfig.accessToken
       });
-      await syncProviderNotifications(userId, 'linkedin');
+      try {
+        await syncProviderNotifications(userId, 'linkedin');
+      } catch (syncErr) {
+        console.warn('[API Integration] Notification sync warning for LinkedIn:', syncErr);
+      }
       return {
         success: true,
         status: 'CONNECTED',
@@ -346,7 +422,11 @@ export async function testLinkedInConnection(
           lastTestedAt: new Date().toISOString(),
           errorMessage: undefined
         });
-        await syncProviderNotifications(userId, 'linkedin');
+        try {
+          await syncProviderNotifications(userId, 'linkedin');
+        } catch (syncErr) {
+          console.warn('[API Integration] Notification sync warning for LinkedIn:', syncErr);
+        }
         return {
           success: true,
           status: 'CONNECTED',
@@ -376,7 +456,11 @@ export async function testLinkedInConnection(
         lastTestedAt: new Date().toISOString(),
         errorMessage: undefined
       });
-      await syncProviderNotifications(userId, 'linkedin');
+      try {
+        await syncProviderNotifications(userId, 'linkedin');
+      } catch (syncErr) {
+        console.warn('[API Integration] Notification sync warning for LinkedIn:', syncErr);
+      }
       return {
         success: true,
         status: 'CONNECTED',
@@ -435,7 +519,11 @@ export async function testWhatsAppConnection(
         lastTestedAt: new Date().toISOString(),
         errorMessage: undefined
       });
-      await syncProviderNotifications(userId, 'whatsapp');
+      try {
+        await syncProviderNotifications(userId, 'whatsapp');
+      } catch (syncErr) {
+        console.warn('[API Integration] Notification sync warning for WhatsApp:', syncErr);
+      }
       return {
         success: true,
         status: 'CONNECTED',
@@ -449,7 +537,11 @@ export async function testWhatsAppConnection(
           lastTestedAt: new Date().toISOString(),
           errorMessage: undefined
         });
-        await syncProviderNotifications(userId, 'whatsapp');
+        try {
+          await syncProviderNotifications(userId, 'whatsapp');
+        } catch (syncErr) {
+          console.warn('[API Integration] Notification sync warning for WhatsApp:', syncErr);
+        }
         return {
           success: true,
           status: 'CONNECTED',
@@ -479,7 +571,11 @@ export async function testWhatsAppConnection(
         lastTestedAt: new Date().toISOString(),
         errorMessage: undefined
       });
-      await syncProviderNotifications(userId, 'whatsapp');
+      try {
+        await syncProviderNotifications(userId, 'whatsapp');
+      } catch (syncErr) {
+        console.warn('[API Integration] Notification sync warning for WhatsApp:', syncErr);
+      }
       return {
         success: true,
         status: 'CONNECTED',
@@ -529,7 +625,9 @@ export async function testGitHubConnection(
     const res = await verifyGitHubToken(tokenOrUser);
 
     if (res.success && res.profile) {
+      const isToken = tokenOrUser.startsWith('github_pat_') || tokenOrUser.startsWith('ghp_') || tokenOrUser.length >= 35;
       const successConfig: Partial<GitHubIntegrationConfig> = {
+        personalAccessToken: isToken ? tokenOrUser : (activeConfig.personalAccessToken || ''),
         username: res.profile.login,
         profileName: res.profile.name || res.profile.login,
         avatarUrl: res.profile.avatarUrl,
@@ -543,7 +641,12 @@ export async function testGitHubConnection(
       };
 
       await saveGitHubConfig(userId, successConfig);
-      await syncProviderNotifications(userId, 'github', res.profile.login);
+
+      try {
+        await syncProviderNotifications(userId, 'github', res.profile.login);
+      } catch (syncErr) {
+        console.warn('[API Integration] Notification sync warning for GitHub:', syncErr);
+      }
 
       return {
         success: true,
@@ -1309,6 +1412,16 @@ export async function disconnectProviderIntegration(
       ...current,
       status: 'DISCONNECTED',
       accessToken: '',
+      errorMessage: undefined
+    });
+  }
+
+  if (pKey === 'github') {
+    const current = await getGitHubConfig(userId);
+    await saveGitHubConfig(userId, {
+      ...current,
+      status: 'DISCONNECTED',
+      personalAccessToken: '',
       errorMessage: undefined
     });
   }
