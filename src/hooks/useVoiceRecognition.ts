@@ -60,14 +60,19 @@ export function useVoiceRecognition({
     const success = await voiceService.startSession({
       fieldId,
       lang: speechLang,
-      initialText: finalText,
+      initialText: initialValue || finalText,
       onTranscriptChange: (newFinal, newInterim) => {
         setFinalText(newFinal);
         setInterimText(newInterim);
 
-        // Notify final committed text strictly without polluting with temporary interim
-        if (newFinal && onFinalCallbackRef.current) {
-          onFinalCallbackRef.current(newFinal);
+        // Compute combined live speech text
+        const liveText = newInterim
+          ? (newFinal ? `${newFinal} ${newInterim}` : newInterim)
+          : newFinal;
+
+        // Immediately update input typebar in real time as the user speaks
+        if (onFinalCallbackRef.current && liveText) {
+          onFinalCallbackRef.current(liveText);
         }
         if (onInterimCallbackRef.current) {
           onInterimCallbackRef.current(newInterim);
@@ -85,7 +90,7 @@ export function useVoiceRecognition({
     if (!success) {
       setStatus('error');
     }
-  }, [fieldId, speechLang, finalText]);
+  }, [fieldId, speechLang, finalText, initialValue]);
 
   const stopListening = useCallback(() => {
     if (voiceService.getActiveFieldId() === fieldId) {
